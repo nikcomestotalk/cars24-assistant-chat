@@ -11,6 +11,7 @@ export function InputBar({
   const [text, setText] = useState("");
   const [recording, setRecording] = useState(false);
   const recRef = useRef<any>(null);
+  const taRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
     return () => {
