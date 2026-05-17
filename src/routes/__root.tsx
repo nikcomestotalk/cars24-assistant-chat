@@ -72,14 +72,18 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "Lovable App" },
-      { name: "description", content: "Lovable Generated Project" },
+      { title: "cars24 AI assitant" },
+      { name: "description", content: "An AI chat assistant for Cars24.com, offering car buying, selling, and financing assistance." },
       { name: "author", content: "Lovable" },
-      { property: "og:title", content: "Lovable App" },
-      { property: "og:description", content: "Lovable Generated Project" },
+      { property: "og:title", content: "cars24 AI assitant" },
+      { property: "og:description", content: "An AI chat assistant for Cars24.com, offering car buying, selling, and financing assistance." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
       { name: "twitter:site", content: "@Lovable" },
+      { name: "twitter:title", content: "cars24 AI assitant" },
+      { name: "twitter:description", content: "An AI chat assistant for Cars24.com, offering car buying, selling, and financing assistance." },
+      { property: "og:image", content: "https://storage.googleapis.com/gpt-engineer-file-uploads/obFh5SzACgbZQw6rhFOEYTqBjbP2/social-images/social-1779002418452-047691f4-d01b-482a-9d76-2c5cb6b0f41borg-logo_(2).webp" },
+      { name: "twitter:image", content: "https://storage.googleapis.com/gpt-engineer-file-uploads/obFh5SzACgbZQw6rhFOEYTqBjbP2/social-images/social-1779002418452-047691f4-d01b-482a-9d76-2c5cb6b0f41borg-logo_(2).webp" },
     ],
     links: [
       {
