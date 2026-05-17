@@ -28,12 +28,9 @@ export function useChatStream() {
 
   useEffect(() => {
     if (typeof window === "undefined") return;
-    let sid = localStorage.getItem("cars24_session_id");
-    if (!sid) {
-      const fresh = uuid();
-      localStorage.setItem("cars24_session_id", fresh);
-      sid = fresh;
-    }
+    const existing = localStorage.getItem("cars24_session_id");
+    const sid = existing ?? uuid();
+    if (!existing) localStorage.setItem("cars24_session_id", sid);
     setSessionId(sid);
     try {
       const s = JSON.parse(localStorage.getItem("cars24_shortlist") || "[]");
