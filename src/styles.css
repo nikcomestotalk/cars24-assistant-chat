@@ -64,7 +64,11 @@
 :root {
   --radius: 0.625rem;
   --background: oklch(1 0 0);
-  --foreground: oklch(0.129 0.042 264.695);
+  --foreground: oklch(0.18 0 0);
+  --cars24-red: oklch(0.598 0.213 22.5);
+  --cars24-red-foreground: oklch(1 0 0);
+  --bubble-assistant: oklch(0.965 0 0);
+  --bubble-assistant-foreground: oklch(0.18 0 0);
   --card: oklch(1 0 0);
   --card-foreground: oklch(0.129 0.042 264.695);
   --popover: oklch(1 0 0);
@@ -96,6 +100,29 @@
   --sidebar-border: oklch(0.929 0.013 255.508);
   --sidebar-ring: oklch(0.704 0.04 256.788);
 }
+
+@theme inline {
+  --color-cars24-red: var(--cars24-red);
+  --color-cars24-red-foreground: var(--cars24-red-foreground);
+  --color-bubble-assistant: var(--bubble-assistant);
+  --color-bubble-assistant-foreground: var(--bubble-assistant-foreground);
+}
+
+@keyframes cars24-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 oklch(0.598 0.213 22.5 / 0.5); }
+  50% { box-shadow: 0 0 0 12px oklch(0.598 0.213 22.5 / 0); }
+}
+@keyframes cars24-slide-up {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+@keyframes cars24-dot {
+  0%, 80%, 100% { opacity: 0.3; transform: scale(0.8); }
+  40% { opacity: 1; transform: scale(1); }
+}
+.cars24-pulse { animation: cars24-pulse 2s ease-out infinite; }
+.cars24-slide-up { animation: cars24-slide-up 0.3s ease-out; }
+.cars24-dot { animation: cars24-dot 1.4s ease-in-out infinite; }
 
 .dark {
   --background: oklch(0.129 0.042 264.695);
