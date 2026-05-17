@@ -28,12 +28,13 @@ export function useChatStream() {
 
   useEffect(() => {
     if (typeof window === "undefined") return;
-    let sid: string | null = localStorage.getItem("cars24_session_id");
+    let sid = localStorage.getItem("cars24_session_id");
     if (!sid) {
-      sid = uuid();
-      localStorage.setItem("cars24_session_id", sid);
+      const fresh = uuid();
+      localStorage.setItem("cars24_session_id", fresh);
+      sid = fresh;
     }
-    setSessionId(sid!);
+    setSessionId(sid);
     try {
       const s = JSON.parse(localStorage.getItem("cars24_shortlist") || "[]");
       if (Array.isArray(s)) setShortlisted(s);
