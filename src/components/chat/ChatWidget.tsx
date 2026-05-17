@@ -125,7 +125,7 @@ export function ChatWidget() {
               </button>
             )}
             <div>
-              <div className="text-base font-bold tracking-tight text-cars24-red">CARS24</div>
+              <div className="text-base font-bold tracking-tight text-cars24-red">Cars24</div>
               <div className="text-[11px] text-muted-foreground">
                 {showHistory ? "Chat history" : "AI Assistant"}
               </div>

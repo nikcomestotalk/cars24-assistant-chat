@@ -9,7 +9,7 @@ function Index() {
   return (
     <main className="min-h-screen bg-background">
       <header className="border-b border-border px-5 py-4">
-        <div className="text-xl font-bold tracking-tight text-cars24-red">CARS24</div>
+        <div className="text-xl font-bold tracking-tight text-cars24-red">Cars24</div>
         <p className="mt-1 text-sm text-muted-foreground">
           Buy & sell used cars — AI assistant preview
         </p>
