@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { MessageCircle, X } from "lucide-react";
+import { MessageCircle, X, History, Plus, Trash2, ArrowLeft } from "lucide-react";
 import { useChatStream } from "./useChatStream";
 import { MessageThread } from "./MessageThread";
 import { InputBar } from "./InputBar";
@@ -14,6 +14,7 @@ const INTENT_CHIPS = [
 export function ChatWidget() {
   const [isOpen, setIsOpen] = useState(false);
   const [hasUnread, setHasUnread] = useState(true);
+  const [showHistory, setShowHistory] = useState(false);
   const sheetRef = useRef<HTMLDivElement | null>(null);
   const closeBtnRef = useRef<HTMLButtonElement | null>(null);
   const chat = useChatStream();
@@ -51,6 +52,17 @@ export function ChatWidget() {
   }, [isOpen]);
 
   const showIntents = chat.messages.length === 0;
+
+  const formatRelative = (ts: number) => {
+    const diff = Date.now() - ts;
+    const m = Math.floor(diff / 60000);
+    if (m < 1) return "just now";
+    if (m < 60) return `${m}m ago`;
+    const h = Math.floor(m / 60);
+    if (h < 24) return `${h}h ago`;
+    const d = Math.floor(h / 24);
+    return `${d}d ago`;
+  };
 
   return (
     <>
@@ -101,24 +113,123 @@ export function ChatWidget() {
 
         {/* Header */}
         <div className="flex items-center justify-between px-4 py-3">
-          <div>
-            <div className="text-base font-bold tracking-tight text-cars24-red">CARS24</div>
-            <div className="text-[11px] text-muted-foreground">AI Assistant</div>
+          <div className="flex items-center gap-2">
+            {showHistory && (
+              <button
+                type="button"
+                onClick={() => setShowHistory(false)}
+                aria-label="Back to chat"
+                className="grid h-8 w-8 place-items-center rounded-full hover:bg-muted"
+              >
+                <ArrowLeft size={16} />
+              </button>
+            )}
+            <div>
+              <div className="text-base font-bold tracking-tight text-cars24-red">CARS24</div>
+              <div className="text-[11px] text-muted-foreground">
+                {showHistory ? "Chat history" : "AI Assistant"}
+              </div>
+            </div>
           </div>
-          <button
-            ref={closeBtnRef}
-            type="button"
-            onClick={() => setIsOpen(false)}
-            aria-label="Minimize chat"
-            className="grid h-9 w-9 place-items-center rounded-full hover:bg-muted"
-          >
-            <X size={18} />
-          </button>
+          <div className="flex items-center gap-1">
+            {!showHistory && (
+              <>
+                <button
+                  type="button"
+                  onClick={chat.newChat}
+                  aria-label="New chat"
+                  title="New chat"
+                  className="grid h-9 w-9 place-items-center rounded-full hover:bg-muted"
+                >
+                  <Plus size={18} />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowHistory(true)}
+                  aria-label="Show chat history"
+                  title="Chat history"
+                  className="relative grid h-9 w-9 place-items-center rounded-full hover:bg-muted"
+                >
+                  <History size={18} />
+                  {chat.chats.length > 0 && (
+                    <span className="absolute -right-0.5 -top-0.5 grid h-4 min-w-4 place-items-center rounded-full bg-cars24-red px-1 text-[10px] font-semibold text-cars24-red-foreground">
+                      {chat.chats.length}
+                    </span>
+                  )}
+                </button>
+              </>
+            )}
+            <button
+              ref={closeBtnRef}
+              type="button"
+              onClick={() => setIsOpen(false)}
+              aria-label="Minimize chat"
+              className="grid h-9 w-9 place-items-center rounded-full hover:bg-muted"
+            >
+              <X size={18} />
+            </button>
+          </div>
         </div>
 
         <div className="h-px bg-border" />
 
-        {/* Intents */}
+        {showHistory ? (
+          <div className="flex-1 overflow-y-auto px-3 py-3">
+            {chat.chats.length === 0 ? (
+              <div className="grid h-full place-items-center px-6 text-center">
+                <div>
+                  <History size={28} className="mx-auto text-muted-foreground" />
+                  <div className="mt-2 text-sm font-medium text-foreground">No previous chats</div>
+                  <div className="mt-1 text-[12px] text-muted-foreground">
+                    Your conversations will appear here.
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <ul className="flex flex-col gap-1.5">
+                {chat.chats.map((c) => {
+                  const isActive = c.id === chat.activeChatId;
+                  return (
+                    <li
+                      key={c.id}
+                      className={`group flex items-center gap-2 rounded-lg border px-3 py-2.5 ${
+                        isActive
+                          ? "border-cars24-red bg-cars24-red/5"
+                          : "border-border hover:border-cars24-red/40 hover:bg-muted"
+                      }`}
+                    >
+                      <button
+                        type="button"
+                        onClick={() => {
+                          chat.loadChat(c.id);
+                          setShowHistory(false);
+                        }}
+                        className="flex-1 text-left"
+                      >
+                        <div className="line-clamp-1 text-[13px] font-medium text-foreground">
+                          {c.title}
+                        </div>
+                        <div className="mt-0.5 text-[11px] text-muted-foreground">
+                          {c.messages.length} messages · {formatRelative(c.updatedAt)}
+                          {isActive ? " · current" : ""}
+                        </div>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => chat.deleteChat(c.id)}
+                        aria-label="Delete chat"
+                        className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-muted-foreground hover:bg-background hover:text-cars24-red"
+                      >
+                        <Trash2 size={15} />
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </div>
+        ) : (
+          <>
         {showIntents && (
           <div className="px-4 pt-3">
             <div className="text-[12px] text-muted-foreground">
@@ -148,6 +259,8 @@ export function ChatWidget() {
         />
 
         <InputBar onSend={chat.sendMessage} disabled={chat.isStreaming} />
+          </>
+        )}
       </div>
     </>
   );
