@@ -65,7 +65,9 @@
   --radius: 0.625rem;
   --background: oklch(1 0 0);
   --foreground: oklch(0.18 0 0);
-  --cars24-red: oklch(0.598 0.213 22.5);
+  /* Cars24 brand is a vivid indigo/blue (#3D38F5-ish), not red.
+     Token name kept for backwards compatibility. */
+  --cars24-red: oklch(0.48 0.27 268);
   --cars24-red-foreground: oklch(1 0 0);
   --bubble-assistant: oklch(0.965 0 0);
   --bubble-assistant-foreground: oklch(0.18 0 0);
@@ -109,8 +111,8 @@
 }
 
 @keyframes cars24-pulse {
-  0%, 100% { box-shadow: 0 0 0 0 oklch(0.598 0.213 22.5 / 0.5); }
-  50% { box-shadow: 0 0 0 12px oklch(0.598 0.213 22.5 / 0); }
+  0%, 100% { box-shadow: 0 0 0 0 oklch(0.48 0.27 268 / 0.5); }
+  50% { box-shadow: 0 0 0 12px oklch(0.48 0.27 268 / 0); }
 }
 @keyframes cars24-slide-up {
   from { transform: translateY(100%); }
