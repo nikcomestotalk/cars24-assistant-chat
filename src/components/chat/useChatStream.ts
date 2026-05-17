@@ -12,6 +12,13 @@ export interface ChatMessage {
   timestamp: number;
 }
 
+export interface SavedChat {
+  id: string;
+  title: string;
+  updatedAt: number;
+  messages: ChatMessage[];
+}
+
 const uuid = () =>
   (crypto as any).randomUUID?.() ?? Math.random().toString(36).slice(2) + Date.now().toString(36);
 
@@ -19,12 +26,28 @@ const FOLLOWUPS_BUY = ["Compare these", "Show me cheaper options", "Calculate EM
 const FOLLOWUPS_EMI = ["Apply for loan", "Try a different car", "Lower the down payment"];
 const FOLLOWUPS_DEFAULT = ["Buy a car", "Sell my car", "Check EMI"];
 
+const CHATS_KEY = "cars24_chats";
+const ACTIVE_KEY = "cars24_active_chat";
+
+function loadChats(): SavedChat[] {
+  try {
+    const raw = localStorage.getItem(CHATS_KEY);
+    const parsed = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
 export function useChatStream() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isStreaming, setIsStreaming] = useState(false);
   const [sessionId, setSessionId] = useState<string>("");
   const [shortlisted, setShortlisted] = useState<number[]>([]);
+  const [chats, setChats] = useState<SavedChat[]>([]);
+  const [activeChatId, setActiveChatId] = useState<string>("");
   const cancelRef = useRef(false);
+  const hydratedRef = useRef(false);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -36,7 +59,43 @@ export function useChatStream() {
       const s = JSON.parse(localStorage.getItem("cars24_shortlist") || "[]");
       if (Array.isArray(s)) setShortlisted(s);
     } catch {}
+
+    const all = loadChats();
+    setChats(all);
+    const activeId = localStorage.getItem(ACTIVE_KEY) || "";
+    const active = all.find((c) => c.id === activeId);
+    if (active) {
+      setActiveChatId(active.id);
+      setMessages(active.messages);
+    } else {
+      setActiveChatId(uuid());
+    }
+    hydratedRef.current = true;
   }, []);
+
+  // Persist current chat whenever messages change
+  useEffect(() => {
+    if (!hydratedRef.current || !activeChatId) return;
+    if (typeof window === "undefined") return;
+    if (messages.length === 0) {
+      // Don't persist empty chats
+      return;
+    }
+    const firstUser = messages.find((m) => m.role === "user");
+    const title = firstUser?.content?.slice(0, 60) || "New chat";
+    setChats((prev) => {
+      const others = prev.filter((c) => c.id !== activeChatId);
+      const next: SavedChat[] = [
+        { id: activeChatId, title, updatedAt: Date.now(), messages },
+        ...others,
+      ].slice(0, 30);
+      try {
+        localStorage.setItem(CHATS_KEY, JSON.stringify(next));
+        localStorage.setItem(ACTIVE_KEY, activeChatId);
+      } catch {}
+      return next;
+    });
+  }, [messages, activeChatId]);
 
   const toggleShortlist = useCallback((id: number) => {
     setShortlisted((prev) => {
@@ -47,6 +106,51 @@ export function useChatStream() {
       return next;
     });
   }, []);
+
+  const newChat = useCallback(() => {
+    if (isStreaming) {
+      cancelRef.current = true;
+      setIsStreaming(false);
+    }
+    const id = uuid();
+    setActiveChatId(id);
+    setMessages([]);
+    try {
+      localStorage.setItem(ACTIVE_KEY, id);
+    } catch {}
+  }, [isStreaming]);
+
+  const loadChat = useCallback((id: string) => {
+    if (isStreaming) {
+      cancelRef.current = true;
+      setIsStreaming(false);
+    }
+    const chat = chats.find((c) => c.id === id);
+    if (!chat) return;
+    setActiveChatId(id);
+    setMessages(chat.messages);
+    try {
+      localStorage.setItem(ACTIVE_KEY, id);
+    } catch {}
+  }, [chats, isStreaming]);
+
+  const deleteChat = useCallback((id: string) => {
+    setChats((prev) => {
+      const next = prev.filter((c) => c.id !== id);
+      try {
+        localStorage.setItem(CHATS_KEY, JSON.stringify(next));
+      } catch {}
+      return next;
+    });
+    if (id === activeChatId) {
+      const fresh = uuid();
+      setActiveChatId(fresh);
+      setMessages([]);
+      try {
+        localStorage.setItem(ACTIVE_KEY, fresh);
+      } catch {}
+    }
+  }, [activeChatId]);
 
   const sendMessage = useCallback(
     async (text: string) => {
@@ -128,5 +232,17 @@ export function useChatStream() {
     [isStreaming],
   );
 
-  return { messages, isStreaming, sessionId, shortlisted, toggleShortlist, sendMessage };
+  return {
+    messages,
+    isStreaming,
+    sessionId,
+    shortlisted,
+    toggleShortlist,
+    sendMessage,
+    chats,
+    activeChatId,
+    newChat,
+    loadChat,
+    deleteChat,
+  };
 }
