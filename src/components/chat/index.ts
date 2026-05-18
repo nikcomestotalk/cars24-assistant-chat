@@ -1,4 +1,6 @@
-export { ChatWidget } from "./ChatWidget";
+export { ChatPage } from "./ChatPage";
+export { Sidebar } from "./Sidebar";
+export { WelcomeScreen } from "./WelcomeScreen";
 export { MessageThread } from "./MessageThread";
 export { CarCards } from "./CarCards";
 export { EMIWidget } from "./EMIWidget";

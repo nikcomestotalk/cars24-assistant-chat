@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { ArrowUp, Mic, Plus } from "lucide-react";
+import { ArrowUp, Mic, Paperclip } from "lucide-react";
 
 export function InputBar({
   onSend,
@@ -63,61 +63,66 @@ export function InputBar({
   const hasText = text.trim().length > 0;
 
   return (
-    <div className="sticky bottom-0 bg-background px-3 pb-3 pt-2">
-      <div className="flex flex-col rounded-3xl border border-border bg-muted/40 px-2 py-2 shadow-sm focus-within:border-foreground/30">
-        <textarea
-          ref={taRef}
-          rows={1}
-          value={text}
-          onChange={(e) => {
-            setText(e.target.value);
-            const el = e.currentTarget;
-            el.style.height = "auto";
-            el.style.height = Math.min(el.scrollHeight, 160) + "px";
-          }}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" && !e.shiftKey) {
-              e.preventDefault();
-              send();
-            }
-          }}
-          placeholder="Ask anything about cars..."
-          aria-label="Message"
-          className="max-h-40 w-full resize-none bg-transparent px-2 py-1.5 text-[15px] leading-6 text-foreground outline-none placeholder:text-muted-foreground"
-        />
-        <div className="mt-1 flex items-center justify-between">
-          <button
-            type="button"
-            aria-label="Add attachment"
-            className="grid h-9 w-9 place-items-center rounded-full text-muted-foreground hover:bg-muted"
-          >
-            <Plus size={18} />
-          </button>
-          <div className="flex items-center gap-1">
+    <div className="border-t border-border bg-background px-4 pb-5 pt-3">
+      <div className="mx-auto max-w-2xl">
+        <div className="flex flex-col rounded-2xl border border-border bg-background shadow-sm transition-shadow focus-within:shadow-md focus-within:border-foreground/20">
+          <textarea
+            ref={taRef}
+            rows={1}
+            value={text}
+            onChange={(e) => {
+              setText(e.target.value);
+              const el = e.currentTarget;
+              el.style.height = "auto";
+              el.style.height = Math.min(el.scrollHeight, 180) + "px";
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                send();
+              }
+            }}
+            placeholder="Ask anything about cars..."
+            aria-label="Message"
+            className="max-h-[180px] w-full resize-none bg-transparent px-4 pt-3.5 pb-1 text-[15px] leading-6 text-foreground outline-none placeholder:text-muted-foreground"
+          />
+          <div className="flex items-center justify-between px-3 pb-2.5">
             <button
               type="button"
-              onClick={toggleMic}
-              aria-label={recording ? "Stop voice input" : "Start voice input"}
-              aria-pressed={recording}
-              className={`grid h-9 w-9 place-items-center rounded-full transition-colors ${
-                recording
-                  ? "bg-cars24-red text-cars24-red-foreground cars24-pulse"
-                  : "text-muted-foreground hover:bg-muted"
-              }`}
+              aria-label="Attach file"
+              className="grid h-8 w-8 place-items-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
             >
-              <Mic size={18} />
+              <Paperclip size={16} />
             </button>
-            <button
-              type="button"
-              onClick={send}
-              disabled={!hasText || disabled}
-              aria-label="Send message"
-              className="grid h-9 w-9 place-items-center rounded-full bg-foreground text-background transition-opacity disabled:opacity-30"
-            >
-              <ArrowUp size={18} />
-            </button>
+            <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                onClick={toggleMic}
+                aria-label={recording ? "Stop voice input" : "Start voice input"}
+                aria-pressed={recording}
+                className={`grid h-8 w-8 place-items-center rounded-lg transition-colors ${
+                  recording
+                    ? "bg-cars24-red text-cars24-red-foreground cars24-pulse"
+                    : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                }`}
+              >
+                <Mic size={16} />
+              </button>
+              <button
+                type="button"
+                onClick={send}
+                disabled={!hasText || disabled}
+                aria-label="Send message"
+                className="grid h-8 w-8 place-items-center rounded-lg bg-cars24-red text-cars24-red-foreground transition-opacity disabled:opacity-30 hover:opacity-90"
+              >
+                <ArrowUp size={16} />
+              </button>
+            </div>
           </div>
         </div>
+        <p className="mt-2 text-center text-[11px] text-muted-foreground">
+          AI responses are for guidance only · Verify details on Cars24 before purchase
+        </p>
       </div>
     </div>
   );
