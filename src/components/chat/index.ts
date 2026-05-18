@@ -1,10 +1,12 @@
 export { ChatPage } from "./ChatPage";
 export { Sidebar } from "./Sidebar";
 export { WelcomeScreen } from "./WelcomeScreen";
+export { ProductSurface } from "./ProductSurface";
 export { MessageThread } from "./MessageThread";
 export { CarCards } from "./CarCards";
 export { EMIWidget } from "./EMIWidget";
 export { FollowUpChips } from "./FollowUpChips";
 export { InputBar } from "./InputBar";
 export { useChatStream } from "./useChatStream";
+export { useUserBehavior } from "./useUserBehavior";
 export { mockStream, MOCK_CARS } from "./mockStream";

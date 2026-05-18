@@ -1,15 +1,33 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Menu, Plus } from "lucide-react";
 import { useChatStream } from "./useChatStream";
+import { useUserBehavior } from "./useUserBehavior";
 import { Sidebar } from "./Sidebar";
 import { WelcomeScreen } from "./WelcomeScreen";
 import { MessageThread } from "./MessageThread";
 import { InputBar } from "./InputBar";
+import { ProductSurface } from "./ProductSurface";
 
 export function ChatPage() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const chat = useChatStream();
+  const behavior = useUserBehavior(chat.shortlisted.length);
   const hasMessages = chat.messages.length > 0;
+
+  // Track car names whenever new car_cards messages arrive
+  useEffect(() => {
+    const lastMsg = chat.messages[chat.messages.length - 1];
+    if (lastMsg?.type === "car_cards" && Array.isArray(lastMsg.data)) {
+      lastMsg.data.slice(0, 3).forEach((car: { name: string }) => {
+        behavior.trackCarView(car.name);
+      });
+    }
+  }, [chat.messages]);
+
+  const handleSend = (text: string) => {
+    behavior.trackMessage(text);
+    chat.sendMessage(text);
+  };
 
   return (
     <div className="flex h-screen overflow-hidden bg-background">
@@ -21,9 +39,9 @@ export function ChatPage() {
         onNewChat={chat.newChat}
         onLoadChat={chat.loadChat}
         onDeleteChat={chat.deleteChat}
+        behavior={behavior}
       />
 
-      {/* Main content */}
       <div className="flex flex-1 flex-col min-w-0">
         {/* Mobile top bar */}
         <header className="flex items-center justify-between border-b border-border px-4 py-3 md:hidden">
@@ -46,7 +64,7 @@ export function ChatPage() {
           </button>
         </header>
 
-        {/* Desktop top bar — only show new chat button when there are messages */}
+        {/* Desktop: new chat button appears only when conversation is active */}
         {hasMessages && (
           <div className="hidden items-center justify-end border-b border-border px-6 py-2.5 md:flex">
             <button
@@ -60,7 +78,7 @@ export function ChatPage() {
           </div>
         )}
 
-        {/* Scrollable area */}
+        {/* Scrollable content area */}
         <div className="flex flex-1 flex-col min-h-0">
           {hasMessages ? (
             <MessageThread
@@ -68,15 +86,17 @@ export function ChatPage() {
               isStreaming={chat.isStreaming}
               shortlisted={chat.shortlisted}
               onToggleShortlist={chat.toggleShortlist}
-              onFollowUp={chat.sendMessage}
+              onFollowUp={handleSend}
             />
           ) : (
-            <WelcomeScreen onSend={chat.sendMessage} />
+            <WelcomeScreen onSend={handleSend} behavior={behavior} />
           )}
         </div>
 
-        {/* Input always visible at bottom */}
-        <InputBar onSend={chat.sendMessage} disabled={chat.isStreaming} />
+        {/* Contextual product surface — shown above input when chatting */}
+        {hasMessages && <ProductSurface stage={behavior.journeyStage} />}
+
+        <InputBar onSend={handleSend} disabled={chat.isStreaming} />
       </div>
     </div>
   );
