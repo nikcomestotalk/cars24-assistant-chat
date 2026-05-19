@@ -5,6 +5,7 @@ export { ProductSurface } from "./ProductSurface";
 export { MessageThread } from "./MessageThread";
 export { CarCards } from "./CarCards";
 export { EMIWidget } from "./EMIWidget";
+export { SellEstimateWidget } from "./SellEstimateWidget";
 export { FollowUpChips } from "./FollowUpChips";
 export { InputBar } from "./InputBar";
 export { useChatStream } from "./useChatStream";

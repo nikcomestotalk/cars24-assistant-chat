@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { mockStream, type StreamEvent } from "./mockStream";
 
-export type MessageType = "text" | "car_cards" | "emi_widget";
+export type MessageType = "text" | "car_cards" | "emi_widget" | "price_estimate";
 export interface ChatMessage {
   id: string;
   role: "user" | "assistant";
@@ -24,6 +24,7 @@ const uuid = () =>
 
 const FOLLOWUPS_BUY = ["Compare these", "Show me cheaper options", "Calculate EMI"];
 const FOLLOWUPS_EMI = ["Apply for loan", "Try a different car", "Lower the down payment"];
+const FOLLOWUPS_SELL = ["Book free inspection", "How to improve my price?", "What documents do I need?", "Find my next car"];
 const FOLLOWUPS_DEFAULT = ["Buy a car", "Sell my car", "Check EMI"];
 
 const CHATS_KEY = "cars24_chats";
@@ -206,6 +207,19 @@ export function useChatStream() {
                 type: "emi_widget",
                 data: e.data,
                 followUps: FOLLOWUPS_EMI,
+                timestamp: Date.now(),
+              },
+            ]);
+          } else if (e.tool === "price_estimate") {
+            setMessages((prev) => [
+              ...prev,
+              {
+                id: uuid(),
+                role: "assistant",
+                content: "",
+                type: "price_estimate",
+                data: e.data,
+                followUps: FOLLOWUPS_SELL,
                 timestamp: Date.now(),
               },
             ]);

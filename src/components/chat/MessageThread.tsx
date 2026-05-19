@@ -3,6 +3,7 @@ import { Car } from "lucide-react";
 import type { ChatMessage } from "./useChatStream";
 import { CarCards } from "./CarCards";
 import { EMIWidget } from "./EMIWidget";
+import { SellEstimateWidget } from "./SellEstimateWidget";
 import { FollowUpChips } from "./FollowUpChips";
 
 function AssistantAvatar() {
@@ -72,6 +73,10 @@ export function MessageThread({
                   <div className="w-[280px]">
                     <EMIWidget data={m.data} />
                   </div>
+                )}
+
+                {m.type === "price_estimate" && (
+                  <SellEstimateWidget data={m.data} />
                 )}
 
                 {(m.type !== "text" || m.content) && (
