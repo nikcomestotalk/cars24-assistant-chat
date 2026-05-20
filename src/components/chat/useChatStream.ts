@@ -49,6 +49,7 @@ export function useChatStream() {
   const [activeChatId, setActiveChatId] = useState<string>("");
   const cancelRef = useRef(false);
   const hydratedRef = useRef(false);
+  const messagesRef = useRef<ChatMessage[]>([]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -73,6 +74,9 @@ export function useChatStream() {
     }
     hydratedRef.current = true;
   }, []);
+
+  // Keep ref in sync so sendMessage always sees current history
+  useEffect(() => { messagesRef.current = messages; }, [messages]);
 
   // Persist current chat whenever messages change
   useEffect(() => {
@@ -237,7 +241,7 @@ export function useChatStream() {
       };
 
       try {
-        await mockStream(trimmed, handle);
+        await mockStream(trimmed, messagesRef.current, handle);
       } catch (err) {
         console.error(err);
         setIsStreaming(false);

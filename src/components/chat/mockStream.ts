@@ -1,5 +1,7 @@
 import type { SellEstimateData } from "./SellEstimateWidget";
 
+type HistoryMessage = { role: "user" | "assistant"; content: string; type: string };
+
 export type StreamEvent =
   | { type: "token"; content: string }
   | { type: "tool_result"; tool: "search_cars" | "calc_emi" | "price_estimate"; data: any }
@@ -114,7 +116,29 @@ async function streamText(text: string, onEvent: (e: StreamEvent) => void) {
   }
 }
 
-export async function mockStream(message: string, onEvent: (e: StreamEvent) => void) {
+// Scan recent history to extract sell context
+function sellContextFromHistory(history: HistoryMessage[]): {
+  inSellFlow: boolean;
+  carMessage: string | null;
+} {
+  const recent = history.slice(-10);
+  const inSellFlow =
+    recent.some((h) => h.type === "price_estimate") ||
+    recent.some(
+      (h) => h.role === "user" && /(sell|selling|want to sell)/.test(h.content.toLowerCase()),
+    );
+  const carMessage =
+    [...recent].reverse().find(
+      (h) => h.role === "user" && SELL_CAR_PROFILES.some((p) => p.pattern.test(h.content)),
+    )?.content ?? null;
+  return { inSellFlow, carMessage };
+}
+
+export async function mockStream(
+  message: string,
+  history: HistoryMessage[],
+  onEvent: (e: StreamEvent) => void,
+) {
   const m = message.toLowerCase();
 
   // Intent flags
@@ -124,6 +148,26 @@ export async function mockStream(message: string, onEvent: (e: StreamEvent) => v
   const isInspection = /(book|inspection|schedule|appointment)/.test(m);
   const isImprove    = /(improve|better.*price|tip|maximiz|higher price)/.test(m);
   const isDocs       = /(document|docs?|papers?|rc|what.*need|required)/.test(m);
+
+  // --- Context-aware: refining a previous sell estimate ---
+  const { inSellFlow, carMessage } = sellContextFromHistory(history);
+  const hasNewDetail = /20\d{2}/.test(m) || /\d+\s*(?:k\b|km|thousand)/i.test(m);
+  const isRefinement = !isSell && inSellFlow && hasNewDetail;
+
+  if (isRefinement) {
+    // Merge car name from history with new year/km details from current message
+    const combined = carMessage ? `${carMessage} ${message}` : message;
+    const estimate = buildEstimate(combined);
+    await streamText(
+      `Got it! Here's a refined estimate for your ${estimate.carName} with those details.`,
+      onEvent,
+    );
+    await sleep(120);
+    onEvent({ type: "tool_result", tool: "price_estimate", data: { ...estimate, hasDefaults: false } });
+    await sleep(80);
+    onEvent({ type: "done" });
+    return;
+  }
 
   if (isDocs) {
     await streamText(
