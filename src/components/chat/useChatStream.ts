@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { mockStream, type StreamEvent } from "./mockStream";
+import { realStream } from "./realStream";
 
 export type MessageType = "text" | "car_cards" | "emi_widget" | "price_estimate";
 export interface ChatMessage {
@@ -241,10 +242,21 @@ export function useChatStream() {
       };
 
       try {
-        await mockStream(trimmed, messagesRef.current, handle);
-      } catch (err) {
-        console.error(err);
-        setIsStreaming(false);
+        await realStream(trimmed, messagesRef.current, handle);
+      } catch (err: unknown) {
+        const code = (err as { code?: string })?.code;
+        if (code === "no_api_key" || !navigator.onLine) {
+          // API key not set — silently fall back to mock responses
+          try {
+            await mockStream(trimmed, messagesRef.current, handle);
+          } catch (mockErr) {
+            console.error(mockErr);
+            setIsStreaming(false);
+          }
+        } else {
+          console.error(err);
+          setIsStreaming(false);
+        }
       }
     },
     [isStreaming],

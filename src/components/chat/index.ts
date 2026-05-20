@@ -11,3 +11,4 @@ export { InputBar } from "./InputBar";
 export { useChatStream } from "./useChatStream";
 export { useUserBehavior } from "./useUserBehavior";
 export { mockStream, MOCK_CARS } from "./mockStream";
+export { realStream } from "./realStream";

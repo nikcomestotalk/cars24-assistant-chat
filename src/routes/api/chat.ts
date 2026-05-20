@@ -1,0 +1,190 @@
+import { createServerFn } from "@tanstack/react-start";
+
+// ─── System prompt ────────────────────────────────────────────────────────────
+
+const SYSTEM_PROMPT = `You are an AI assistant for Cars24, India's largest used car marketplace.
+Help users buy used cars, sell their car, calculate EMI, find insurance, and book service.
+
+You know the Indian car market well — Maruti Swift, WagonR, Baleno, Brezza, Dzire, Alto;
+Hyundai i20, Creta, Venue, Verna; Honda City, Amaze; Tata Nexon, Punch, Altroz;
+Mahindra XUV700, Scorpio; Toyota Innova, Fortuner; and typical prices, fuel types, mileage.
+
+When to use tools:
+- search_cars: whenever the user wants to browse or find cars to buy
+- calc_emi: whenever they ask about EMI, loan, or financing
+- price_estimate: whenever they want to know what their car is worth or want to sell
+
+Keep responses concise (1–3 sentences). After triggering a tool you do not need to describe
+what the widget will show — just give a short human intro line before calling the tool.`;
+
+// ─── Tool definitions ─────────────────────────────────────────────────────────
+
+const TOOLS = [
+  {
+    name: "search_cars",
+    description: "Show used car listings matching the user's requirements",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        query: { type: "string", description: "Brief description of what they want" },
+      },
+    },
+  },
+  {
+    name: "calc_emi",
+    description: "Show an interactive EMI calculator for a specific car",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        car_name: { type: "string", description: "Full car name" },
+        price: { type: "number", description: "Car price in INR" },
+      },
+      required: ["car_name", "price"],
+    },
+  },
+  {
+    name: "price_estimate",
+    description: "Show a sell price estimate for the user's car",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        car_name: { type: "string", description: "Car model name" },
+        year: { type: "number", description: "Year of manufacture" },
+        km: { type: "number", description: "Kilometres driven" },
+        city: { type: "string", description: "City where the car is registered" },
+        fuel: { type: "string", description: "Fuel type: Petrol / Diesel / CNG / Electric" },
+      },
+      required: ["car_name"],
+    },
+  },
+];
+
+// ─── Mock data ────────────────────────────────────────────────────────────────
+
+const MOCK_CARS = [
+  { id: 1, name: "Maruti Swift VXI",    year: 2021, km: 32000, fuel: "Petrol", price: 595000,  image: null },
+  { id: 2, name: "Honda City ZX",       year: 2020, km: 45000, fuel: "Petrol", price: 895000,  image: null },
+  { id: 3, name: "Hyundai i20 Asta",    year: 2022, km: 18000, fuel: "Petrol", price: 785000,  image: null },
+  { id: 4, name: "Maruti Baleno Alpha", year: 2021, km: 28000, fuel: "Petrol", price: 665000,  image: null },
+  { id: 5, name: "Tata Nexon XZ+",      year: 2022, km: 21000, fuel: "Petrol", price: 910000,  image: null },
+];
+
+const SELL_PROFILES = [
+  { pattern: /wagon\s*r/i, name: "Maruti WagonR VXI",    min: 310000, max: 490000, est: 405000 },
+  { pattern: /alto/i,      name: "Maruti Alto K10",       min: 200000, max: 340000, est: 275000 },
+  { pattern: /dzire/i,     name: "Maruti Dzire ZXI",      min: 410000, max: 610000, est: 510000 },
+  { pattern: /swift/i,     name: "Maruti Swift VXi",      min: 380000, max: 560000, est: 475000 },
+  { pattern: /baleno/i,    name: "Maruti Baleno Alpha",   min: 490000, max: 710000, est: 610000 },
+  { pattern: /ertiga/i,    name: "Maruti Ertiga ZXI",     min: 580000, max: 840000, est: 710000 },
+  { pattern: /brezza/i,    name: "Maruti Brezza ZXI",     min: 670000, max: 980000, est: 840000 },
+  { pattern: /i20/i,       name: "Hyundai i20 Asta",      min: 520000, max: 770000, est: 650000 },
+  { pattern: /creta/i,     name: "Hyundai Creta SX",      min: 780000, max: 1150000,est: 960000 },
+  { pattern: /venue/i,     name: "Hyundai Venue SX",      min: 640000, max: 920000, est: 780000 },
+  { pattern: /verna/i,     name: "Hyundai Verna SX",      min: 560000, max: 830000, est: 700000 },
+  { pattern: /city/i,      name: "Honda City ZX",         min: 620000, max: 900000, est: 760000 },
+  { pattern: /nexon/i,     name: "Tata Nexon XZ+",        min: 710000, max: 1060000,est: 880000 },
+  { pattern: /punch/i,     name: "Tata Punch Creative",   min: 560000, max: 810000, est: 690000 },
+  { pattern: /innova/i,    name: "Toyota Innova Crysta",  min: 1100000,max: 1700000,est: 1380000},
+  { pattern: /fortuner/i,  name: "Toyota Fortuner",       min: 2200000,max: 3100000,est: 2650000},
+  { pattern: /scorpio/i,   name: "Mahindra Scorpio",      min: 690000, max: 1050000,est: 860000 },
+  { pattern: /xuv\s*700/i, name: "Mahindra XUV700 AX7",  min: 1500000,max: 2100000,est: 1780000},
+];
+
+function buildPriceEstimate(input: {
+  car_name: string;
+  year?: number;
+  km?: number;
+  city?: string;
+  fuel?: string;
+}) {
+  const p = SELL_PROFILES.find((s) => s.pattern.test(input.car_name)) ?? {
+    name: input.car_name,
+    min: 380000, max: 620000, est: 500000,
+  };
+  const year = input.year ?? 2021;
+  const km   = input.km   ?? 42000;
+  const age  = new Date().getFullYear() - year;
+  return {
+    carName: p.name,
+    year,
+    km,
+    fuel: input.fuel ?? "Petrol",
+    city: input.city ?? "Delhi",
+    priceMin:      p.min,
+    priceMax:      p.max,
+    priceEstimate: p.est,
+    hasDefaults: !input.year || !input.km,
+    factors: [
+      { label: "Single owner",                                            impact: "positive" },
+      { label: km > 60000 ? "High mileage" : "Low mileage",             impact: km > 60000 ? "negative" : "positive" },
+      { label: input.fuel ?? "Petrol",                                   impact: "neutral" },
+      { label: age > 4 ? "Older model year" : "Recent model",           impact: age > 4 ? "negative" : "positive" },
+      { label: "Original paint",                                          impact: "positive" },
+      { label: "Insurance active",                                        impact: "neutral" },
+    ],
+  };
+}
+
+function executeTool(name: string, input: Record<string, unknown>) {
+  if (name === "search_cars")    return MOCK_CARS;
+  if (name === "calc_emi")       return { carName: input.car_name, price: input.price };
+  if (name === "price_estimate") return buildPriceEstimate(input as Parameters<typeof buildPriceEstimate>[0]);
+  return null;
+}
+
+// ─── Server function ──────────────────────────────────────────────────────────
+
+export type ChatRequest = {
+  messages: Array<{ role: string; content: string }>;
+};
+
+export type ChatResponse = {
+  text: string;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  tool: { name: string; data: any } | null;
+};
+
+export const chatServerFn = createServerFn({ method: "POST" })
+  .inputValidator((data: ChatRequest) => data)
+  .handler(async ({ data }): Promise<ChatResponse> => {
+    const apiKey = process.env.ANTHROPIC_API_KEY;
+    if (!apiKey) {
+      throw Object.assign(new Error("ANTHROPIC_API_KEY not configured"), { code: "no_api_key" });
+    }
+
+    const res = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "x-api-key": apiKey,
+        "anthropic-version": "2023-06-01",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "claude-haiku-4-5-20251001",
+        max_tokens: 1024,
+        system: SYSTEM_PROMPT,
+        messages: data.messages,
+        tools: TOOLS,
+      }),
+    });
+
+    if (!res.ok) {
+      const err = await res.text();
+      console.error("Anthropic API error", res.status, err);
+      throw new Error(`Upstream error ${res.status}`);
+    }
+
+    const body = (await res.json()) as {
+      content: Array<{ type: string; text?: string; name?: string; input?: Record<string, unknown> }>;
+    };
+
+    const textBlock = body.content.find((c) => c.type === "text");
+    const toolBlock = body.content.find((c) => c.type === "tool_use");
+
+    return {
+      text: textBlock?.text ?? "",
+      tool: toolBlock
+        ? { name: toolBlock.name!, data: executeTool(toolBlock.name!, toolBlock.input ?? {}) }
+        : null,
+    };
+  });
