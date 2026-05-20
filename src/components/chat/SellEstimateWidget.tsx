@@ -15,6 +15,7 @@ export interface SellEstimateData {
   priceMax: number;
   priceEstimate: number;
   factors: SellFactor[];
+  hasDefaults?: boolean;
 }
 
 const fmt = (p: number) => `₹${(p / 100000).toFixed(1)}L`;
@@ -104,6 +105,13 @@ export function SellEstimateWidget({ data }: { data: SellEstimateData }) {
             })}
           </div>
         </div>
+
+        {/* Defaults notice */}
+        {data.hasDefaults && (
+          <div className="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] text-amber-700">
+            Using typical values · Share year & KMs for a precise number
+          </div>
+        )}
 
         {/* Trust strip */}
         <div className="mb-3 flex items-center justify-around rounded-lg bg-muted/60 py-2">

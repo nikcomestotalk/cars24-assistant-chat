@@ -24,7 +24,7 @@ const uuid = () =>
 
 const FOLLOWUPS_BUY = ["Compare these", "Show me cheaper options", "Calculate EMI"];
 const FOLLOWUPS_EMI = ["Apply for loan", "Try a different car", "Lower the down payment"];
-const FOLLOWUPS_SELL = ["Book free inspection", "How to improve my price?", "What documents do I need?", "Find my next car"];
+const FOLLOWUPS_SELL = ["Book inspection", "How to improve my price?", "Documents needed", "Find my next car"];
 const FOLLOWUPS_DEFAULT = ["Buy a car", "Sell my car", "Check EMI"];
 
 const CHATS_KEY = "cars24_chats";
