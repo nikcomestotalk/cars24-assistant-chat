@@ -4,7 +4,7 @@ type HistoryMessage = { role: "user" | "assistant"; content: string; type: strin
 
 export type StreamEvent =
   | { type: "token"; content: string }
-  | { type: "tool_result"; tool: "search_cars" | "calc_emi" | "price_estimate"; data: any }
+  | { type: "tool_result"; tool: "search_cars" | "calc_emi" | "price_estimate" | "price_card" | "slot_picker" | "otp_input" | "confirmation"; data: any }
   | { type: "done"; followUps?: string[] };
 
 export const MOCK_CARS = [

@@ -1,4 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
+import { processWorkflowMessage } from "./workflow/ConversationController";
 
 const SYSTEM_PROMPT = `You are an AI assistant for Cars24, India's largest used car marketplace.
 Help users buy used cars, sell their car, calculate EMI, find insurance, and book service.
@@ -150,13 +151,19 @@ function parseFollowUps(text: string): { clean: string; followUps: string[] } {
 
 export type ChatRequest = {
   messages: Array<{ role: string; content: string }>;
+  sessionId?: string;
+  /** Latest user message text (used for workflow engine) */
+  latestMessage?: string;
 };
 
 export type ChatResponse = {
   text: string;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   tool: { name: string; data: any } | null;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  widget?: { type: string; data: any };
   followUps: string[];
+  isWorkflow?: boolean;
   error?: string;
 };
 
@@ -168,6 +175,25 @@ export const chatServerFn = createServerFn({ method: "POST" })
       return { text: "", tool: null, followUps: [], error: "no_api_key" };
     }
 
+    // ── Workflow engine path ────────────────────────────────────────────────
+    if (data.sessionId && data.latestMessage) {
+      const workflowOutput = await processWorkflowMessage(
+        data.sessionId,
+        data.latestMessage,
+        apiKey,
+      );
+      if (workflowOutput) {
+        return {
+          text: workflowOutput.text,
+          tool: null,
+          widget: workflowOutput.widget,
+          followUps: workflowOutput.followUps ?? [],
+          isWorkflow: true,
+        };
+      }
+    }
+
+    // ── Free-form LLM path ─────────────────────────────────────────────────
     const res = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: {

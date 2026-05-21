@@ -50,13 +50,18 @@ export async function realStream(
   message: string,
   history: HistoryMessage[],
   onEvent: (e: StreamEvent) => void,
+  sessionId?: string,
 ): Promise<void> {
   const messages = buildApiMessages(history, message);
 
-  const data = await chatServerFn({ data: { messages } }) as {
+  const data = await chatServerFn({
+    data: { messages, sessionId, latestMessage: message },
+  }) as {
     text: string;
     tool: { name: string; data: any } | null;
+    widget?: { type: string; data: Record<string, unknown> };
     followUps: string[];
+    isWorkflow?: boolean;
     error?: string;
   };
 
@@ -68,10 +73,17 @@ export async function realStream(
     await simulateStream(data.text, onEvent);
   }
 
-  if (data.tool) {
+  type ToolName = "search_cars" | "calc_emi" | "price_estimate" | "price_card" | "slot_picker" | "otp_input" | "confirmation";
+  if (data.widget) {
     onEvent({
       type: "tool_result",
-      tool: data.tool.name as "search_cars" | "calc_emi" | "price_estimate",
+      tool: data.widget.type as ToolName,
+      data: data.widget.data,
+    });
+  } else if (data.tool) {
+    onEvent({
+      type: "tool_result",
+      tool: data.tool.name as ToolName,
       data: data.tool.data,
     });
   }
