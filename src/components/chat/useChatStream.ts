@@ -23,11 +23,6 @@ export interface SavedChat {
 const uuid = () =>
   (crypto as any).randomUUID?.() ?? Math.random().toString(36).slice(2) + Date.now().toString(36);
 
-const FOLLOWUPS_BUY = ["Compare these", "Show me cheaper options", "Calculate EMI"];
-const FOLLOWUPS_EMI = ["Apply for loan", "Try a different car", "Lower the down payment"];
-const FOLLOWUPS_SELL = ["Book inspection", "How to improve my price?", "Documents needed", "Find my next car"];
-const FOLLOWUPS_DEFAULT = ["Buy a car", "Sell my car", "Check EMI"];
-
 const CHATS_KEY = "cars24_chats";
 const ACTIVE_KEY = "cars24_active_chat";
 
@@ -83,10 +78,7 @@ export function useChatStream() {
   useEffect(() => {
     if (!hydratedRef.current || !activeChatId) return;
     if (typeof window === "undefined") return;
-    if (messages.length === 0) {
-      // Don't persist empty chats
-      return;
-    }
+    if (messages.length === 0) return;
     const firstUser = messages.find((m) => m.role === "user");
     const title = firstUser?.content?.slice(0, 60) || "New chat";
     setChats((prev) => {
@@ -106,55 +98,39 @@ export function useChatStream() {
   const toggleShortlist = useCallback((id: number) => {
     setShortlisted((prev) => {
       const next = prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id];
-      try {
-        localStorage.setItem("cars24_shortlist", JSON.stringify(next));
-      } catch {}
+      try { localStorage.setItem("cars24_shortlist", JSON.stringify(next)); } catch {}
       return next;
     });
   }, []);
 
   const newChat = useCallback(() => {
-    if (isStreaming) {
-      cancelRef.current = true;
-      setIsStreaming(false);
-    }
+    if (isStreaming) { cancelRef.current = true; setIsStreaming(false); }
     const id = uuid();
     setActiveChatId(id);
     setMessages([]);
-    try {
-      localStorage.setItem(ACTIVE_KEY, id);
-    } catch {}
+    try { localStorage.setItem(ACTIVE_KEY, id); } catch {}
   }, [isStreaming]);
 
   const loadChat = useCallback((id: string) => {
-    if (isStreaming) {
-      cancelRef.current = true;
-      setIsStreaming(false);
-    }
+    if (isStreaming) { cancelRef.current = true; setIsStreaming(false); }
     const chat = chats.find((c) => c.id === id);
     if (!chat) return;
     setActiveChatId(id);
     setMessages(chat.messages);
-    try {
-      localStorage.setItem(ACTIVE_KEY, id);
-    } catch {}
+    try { localStorage.setItem(ACTIVE_KEY, id); } catch {}
   }, [chats, isStreaming]);
 
   const deleteChat = useCallback((id: string) => {
     setChats((prev) => {
       const next = prev.filter((c) => c.id !== id);
-      try {
-        localStorage.setItem(CHATS_KEY, JSON.stringify(next));
-      } catch {}
+      try { localStorage.setItem(CHATS_KEY, JSON.stringify(next)); } catch {}
       return next;
     });
     if (id === activeChatId) {
       const fresh = uuid();
       setActiveChatId(fresh);
       setMessages([]);
-      try {
-        localStorage.setItem(ACTIVE_KEY, fresh);
-      } catch {}
+      try { localStorage.setItem(ACTIVE_KEY, fresh); } catch {}
     }
   }, [activeChatId]);
 
@@ -164,19 +140,11 @@ export function useChatStream() {
       if (!trimmed || isStreaming) return;
 
       const userMsg: ChatMessage = {
-        id: uuid(),
-        role: "user",
-        content: trimmed,
-        type: "text",
-        timestamp: Date.now(),
+        id: uuid(), role: "user", content: trimmed, type: "text", timestamp: Date.now(),
       };
       const assistantId = uuid();
       const assistantMsg: ChatMessage = {
-        id: assistantId,
-        role: "assistant",
-        content: "",
-        type: "text",
-        timestamp: Date.now(),
+        id: assistantId, role: "assistant", content: "", type: "text", timestamp: Date.now(),
       };
       setMessages((prev) => [...prev, userMsg, assistantMsg]);
       setIsStreaming(true);
@@ -184,59 +152,39 @@ export function useChatStream() {
 
       const handle = (e: StreamEvent) => {
         if (cancelRef.current) return;
+
         if (e.type === "token") {
           setMessages((prev) =>
             prev.map((m) => (m.id === assistantId ? { ...m, content: m.content + e.content } : m)),
           );
         } else if (e.type === "tool_result") {
           if (e.tool === "search_cars") {
-            setMessages((prev) => [
-              ...prev,
-              {
-                id: uuid(),
-                role: "assistant",
-                content: "",
-                type: "car_cards",
-                data: e.data,
-                followUps: FOLLOWUPS_BUY,
-                timestamp: Date.now(),
-              },
-            ]);
+            setMessages((prev) => [...prev, {
+              id: uuid(), role: "assistant", content: "", type: "car_cards",
+              data: e.data, timestamp: Date.now(),
+            }]);
           } else if (e.tool === "calc_emi") {
-            setMessages((prev) => [
-              ...prev,
-              {
-                id: uuid(),
-                role: "assistant",
-                content: "",
-                type: "emi_widget",
-                data: e.data,
-                followUps: FOLLOWUPS_EMI,
-                timestamp: Date.now(),
-              },
-            ]);
+            setMessages((prev) => [...prev, {
+              id: uuid(), role: "assistant", content: "", type: "emi_widget",
+              data: e.data, timestamp: Date.now(),
+            }]);
           } else if (e.tool === "price_estimate") {
-            setMessages((prev) => [
-              ...prev,
-              {
-                id: uuid(),
-                role: "assistant",
-                content: "",
-                type: "price_estimate",
-                data: e.data,
-                followUps: FOLLOWUPS_SELL,
-                timestamp: Date.now(),
-              },
-            ]);
+            setMessages((prev) => [...prev, {
+              id: uuid(), role: "assistant", content: "", type: "price_estimate",
+              data: e.data, timestamp: Date.now(),
+            }]);
           }
         } else if (e.type === "done") {
-          setMessages((prev) =>
-            prev.map((m, i, arr) => {
-              if (i !== arr.length - 1) return m;
-              if (m.followUps) return m;
-              return { ...m, followUps: FOLLOWUPS_DEFAULT };
-            }),
-          );
+          // Apply follow-ups from AI to the last assistant message
+          const followUps = e.followUps ?? [];
+          setMessages((prev) => {
+            const lastIdx = [...prev].reverse().findIndex((m) => m.role === "assistant");
+            if (lastIdx === -1) return prev;
+            const idx = prev.length - 1 - lastIdx;
+            return prev.map((m, i) =>
+              i === idx ? { ...m, followUps } : m,
+            );
+          });
           setIsStreaming(false);
         }
       };
@@ -246,7 +194,6 @@ export function useChatStream() {
       } catch (err: unknown) {
         const code = (err as { code?: string })?.code;
         if (code === "no_api_key" || !navigator.onLine) {
-          // API key not set — silently fall back to mock responses
           try {
             await mockStream(trimmed, messagesRef.current, handle);
           } catch (mockErr) {
@@ -263,16 +210,7 @@ export function useChatStream() {
   );
 
   return {
-    messages,
-    isStreaming,
-    sessionId,
-    shortlisted,
-    toggleShortlist,
-    sendMessage,
-    chats,
-    activeChatId,
-    newChat,
-    loadChat,
-    deleteChat,
+    messages, isStreaming, sessionId, shortlisted, toggleShortlist,
+    sendMessage, chats, activeChatId, newChat, loadChat, deleteChat,
   };
 }

@@ -5,7 +5,7 @@ type HistoryMessage = { role: "user" | "assistant"; content: string; type: strin
 export type StreamEvent =
   | { type: "token"; content: string }
   | { type: "tool_result"; tool: "search_cars" | "calc_emi" | "price_estimate"; data: any }
-  | { type: "done" };
+  | { type: "done"; followUps?: string[] };
 
 export const MOCK_CARS = [
   { id: 1, name: "Maruti Swift VXI",   year: 2021, km: 32000, fuel: "Petrol", price: 595000,  image: null as string | null },
@@ -155,7 +155,6 @@ export async function mockStream(
   const isRefinement = !isSell && inSellFlow && hasNewDetail;
 
   if (isRefinement) {
-    // Merge car name from history with new year/km details from current message
     const combined = carMessage ? `${carMessage} ${message}` : message;
     const estimate = buildEstimate(combined);
     await streamText(
@@ -165,9 +164,11 @@ export async function mockStream(
     await sleep(120);
     onEvent({ type: "tool_result", tool: "price_estimate", data: { ...estimate, hasDefaults: false } });
     await sleep(80);
-    onEvent({ type: "done" });
+    onEvent({ type: "done", followUps: ["Book free inspection", "How to improve my price?", "Documents needed"] });
     return;
   }
+
+  let followUps: string[] = [];
 
   if (isDocs) {
     await streamText(
@@ -181,6 +182,7 @@ export async function mockStream(
       "Cars24 handles the RC transfer — no need to visit the RTO yourself.",
       onEvent,
     );
+    followUps = ["Book free inspection", "How to improve my price?", "Find my next car"];
 
   } else if (isImprove) {
     await streamText(
@@ -194,6 +196,7 @@ export async function mockStream(
       "A clean, well-documented car can fetch up to ₹30,000 more.",
       onEvent,
     );
+    followUps = ["Book free inspection", "Documents needed", "Find my next car"];
 
   } else if (isInspection) {
     await streamText(
@@ -205,6 +208,7 @@ export async function mockStream(
       "Slots available today and tomorrow. Tap the button in the estimate card above to book.",
       onEvent,
     );
+    followUps = ["Documents needed", "How to improve my price?", "Find my next car"];
 
   } else if (isSell && hasSellDetail(m)) {
     const estimate = buildEstimate(message);
@@ -214,12 +218,16 @@ export async function mockStream(
     await streamText(prefix, onEvent);
     await sleep(120);
     onEvent({ type: "tool_result", tool: "price_estimate", data: estimate });
+    followUps = estimate.hasDefaults
+      ? ["Share year and KMs", "Book free inspection", "How to improve my price?"]
+      : ["Book free inspection", "Documents needed", "How to improve my price?"];
 
   } else if (isSell) {
     await streamText(
       "I can get you an estimate right away! What car do you drive? Share the model, year, and approximate KMs — for example: \"WagonR 2020, 45k km, Delhi\".",
       onEvent,
     );
+    followUps = ["WagonR 2020, 45k km", "Swift 2019, 60k km", "Creta 2021, 30k km"];
 
   } else if (isFinance) {
     await streamText(
@@ -228,6 +236,7 @@ export async function mockStream(
     );
     await sleep(120);
     onEvent({ type: "tool_result", tool: "calc_emi", data: { carId: 2, carName: "Honda City ZX", price: 895000 } });
+    followUps = ["Lower the down payment", "Show cheaper options", "Apply for loan"];
 
   } else if (isBuy) {
     await streamText(
@@ -236,14 +245,16 @@ export async function mockStream(
     );
     await sleep(120);
     onEvent({ type: "tool_result", tool: "search_cars", data: MOCK_CARS });
+    followUps = ["Compare these cars", "Calculate EMI", "Show diesel options"];
 
   } else {
     await streamText(
-      "I'm your Cars24 assistant — I can help you buy a car, get a price for yours, calculate EMI, or track your Orbit order. What would you like to do?",
+      "I'm your Cars24 assistant — I can help you buy a car, get a price for yours, calculate EMI, or book a free inspection. What would you like to do?",
       onEvent,
     );
+    followUps = ["Buy a used car", "Sell my car", "Calculate loan EMI"];
   }
 
   await sleep(80);
-  onEvent({ type: "done" });
+  onEvent({ type: "done", followUps });
 }

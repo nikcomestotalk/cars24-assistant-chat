@@ -1,14 +1,8 @@
-import { chatServerFn } from "../../routes/api/chat";
+import { chatServerFn } from "../../server/chat";
 import type { StreamEvent } from "./mockStream";
 
 type HistoryMessage = { role: "user" | "assistant"; content: string; type: string };
 
-/**
- * Converts the internal message thread (which includes widget messages) into
- * the plain user/assistant array the Anthropic API expects.
- * Widget messages (car_cards, emi_widget, price_estimate) become a short
- * bracketed note so Claude retains the context of what was shown.
- */
 function buildApiMessages(
   history: HistoryMessage[],
   currentMessage: string,
@@ -18,7 +12,7 @@ function buildApiMessages(
   for (const m of history) {
     let content: string;
     if (m.type === "text") {
-      if (!m.content) continue; // skip empty placeholder assistant messages
+      if (!m.content) continue;
       content = m.content;
     } else {
       const label: Record<string, string> = {
@@ -29,7 +23,6 @@ function buildApiMessages(
       content = label[m.type] ?? "[Showed widget]";
     }
 
-    // Anthropic requires strictly alternating roles — merge consecutive same-role
     if (result.length > 0 && result[result.length - 1].role === m.role) {
       result[result.length - 1].content += "\n" + content;
     } else {
@@ -37,7 +30,6 @@ function buildApiMessages(
     }
   }
 
-  // Append the current message (always user)
   if (result.length > 0 && result[result.length - 1].role === "user") {
     result[result.length - 1].content += "\n" + currentMessage;
   } else {
@@ -61,15 +53,15 @@ export async function realStream(
 ): Promise<void> {
   const messages = buildApiMessages(history, message);
 
-  let data: { text: string; tool: { name: string; data: any } | null };
-  try {
-    data = await chatServerFn({ data: { messages } }) as typeof data;
-  } catch (err: unknown) {
-    const code = (err as { code?: string })?.code;
-    if (code === "no_api_key") {
-      throw Object.assign(new Error("no_api_key"), { code: "no_api_key" });
-    }
-    throw err;
+  const data = await chatServerFn({ data: { messages } }) as {
+    text: string;
+    tool: { name: string; data: any } | null;
+    followUps: string[];
+    error?: string;
+  };
+
+  if (data.error) {
+    throw Object.assign(new Error(data.error), { code: data.error });
   }
 
   if (data.text) {
@@ -84,5 +76,5 @@ export async function realStream(
     });
   }
 
-  onEvent({ type: "done" });
+  onEvent({ type: "done", followUps: data.followUps ?? [] });
 }
