@@ -126,6 +126,20 @@
 .cars24-slide-up { animation: cars24-slide-up 0.3s ease-out; }
 .cars24-dot { animation: cars24-dot 1.4s ease-in-out infinite; }
 
+/* Flow builder utilities */
+.input-base {
+  @apply w-full rounded-lg border border-border bg-background px-3 py-2 text-[13px] text-foreground outline-none placeholder:text-muted-foreground focus:border-foreground/30 focus:ring-0;
+}
+.input-sm {
+  @apply rounded-md border border-border bg-background px-2 py-1.5 text-[12px] text-foreground outline-none placeholder:text-muted-foreground focus:border-foreground/30;
+}
+.label {
+  @apply mb-1 block text-[11px] font-medium uppercase tracking-wide text-muted-foreground;
+}
+.btn-xs {
+  @apply rounded-md border border-border px-2 py-1 text-[11px] text-muted-foreground hover:border-cars24-red hover:text-cars24-red transition-colors;
+}
+
 .dark {
   --background: oklch(0.129 0.042 264.695);
   --foreground: oklch(0.984 0.003 247.858);

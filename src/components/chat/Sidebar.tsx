@@ -1,4 +1,5 @@
-import { Plus, MessageSquare, Trash2, X, Fuel, IndianRupee, Car } from "lucide-react";
+import { Plus, MessageSquare, Trash2, X, Fuel, IndianRupee, Car, Workflow } from "lucide-react";
+import { Link } from "@tanstack/react-router";
 import type { SavedChat } from "./useChatStream";
 import type { JourneyStage, BehaviorState } from "./useUserBehavior";
 
@@ -248,8 +249,13 @@ export function Sidebar({
         </div>
 
         {/* Footer */}
-        <div className="border-t border-border px-4 py-3">
-          <div className="text-[11px] text-muted-foreground">Cars24 · AI-powered car guide</div>
+        <div className="border-t border-border px-4 py-3 space-y-2">
+          <Link to="/flows"
+            className="flex items-center gap-2 rounded-lg px-2 py-1.5 text-[12px] text-muted-foreground hover:bg-muted hover:text-foreground transition-colors">
+            <Workflow size={14} />
+            Flow Builder
+          </Link>
+          <div className="text-[11px] text-muted-foreground px-2">Cars24 · AI-powered car guide</div>
         </div>
       </aside>
     </>
