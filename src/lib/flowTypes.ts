@@ -51,6 +51,10 @@ export interface FlowStep {
   // shared
   followUpChips?: string[];
   notes?: string;      // internal notes / description
+
+  // visual editor
+  nextStepId?: string;               // explicit next step (non-branch)
+  position?: { x: number; y: number }; // canvas position
 }
 
 // ─── Flow ────────────────────────────────────────────────────────────────────

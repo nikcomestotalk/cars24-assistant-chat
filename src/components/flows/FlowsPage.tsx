@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Plus, ChevronDown, ChevronUp, Trash2, GripVertical, ArrowRight, Zap, MessageSquare, GitBranch, LayoutGrid, HelpCircle, Save, ArrowLeft, AlertCircle, CheckCircle2, Clock } from "lucide-react";
 import type { ConversationFlow, FlowStep, StepType, FieldDef, ApiParam } from "../../lib/flowTypes";
 import { SEED_FLOWS } from "../../lib/flowTypes";
+import { FlowCanvas } from "./FlowCanvas";
 
 const FLOWS_KEY = "cars24_flows";
 
@@ -560,7 +561,7 @@ export function FlowsPage() {
 
   if (selectedFlow) {
     return (
-      <FlowEditor
+      <FlowCanvas
         flow={selectedFlow}
         onSave={saveFlow}
         onBack={() => setSelected(null)}
@@ -569,7 +570,7 @@ export function FlowsPage() {
   }
 
   return (
-    <div className="flex h-full flex-col">
+    <div className="flex h-screen flex-col overflow-hidden bg-background">
       <div className="border-b border-border px-6 py-4 flex items-center justify-between">
         <div>
           <h1 className="text-[18px] font-bold text-foreground">Flow Builder</h1>
