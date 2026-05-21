@@ -4,6 +4,10 @@ import type { ChatMessage } from "./useChatStream";
 import { CarCards } from "./CarCards";
 import { EMIWidget } from "./EMIWidget";
 import { SellEstimateWidget } from "./SellEstimateWidget";
+import { PriceCardWidget } from "./PriceCardWidget";
+import { SlotPickerWidget } from "./SlotPickerWidget";
+import { OTPInputWidget } from "./OTPInputWidget";
+import { ConfirmationWidget } from "./ConfirmationWidget";
 import { FollowUpChips } from "./FollowUpChips";
 
 function AssistantAvatar() {
@@ -24,12 +28,14 @@ export function MessageThread({
   shortlisted,
   onToggleShortlist,
   onFollowUp,
+  onSend,
 }: {
   messages: ChatMessage[];
   isStreaming: boolean;
   shortlisted: number[];
   onToggleShortlist: (id: number) => void;
   onFollowUp: (text: string) => void;
+  onSend?: (text: string) => void;
 }) {
   const endRef = useRef<HTMLDivElement | null>(null);
 
@@ -77,6 +83,28 @@ export function MessageThread({
 
                 {m.type === "price_estimate" && (
                   <SellEstimateWidget data={m.data} />
+                )}
+
+                {m.type === "price_card" && (
+                  <PriceCardWidget data={m.data} />
+                )}
+
+                {m.type === "slot_picker" && (
+                  <SlotPickerWidget
+                    data={m.data}
+                    onSelect={(slot) => (onSend ?? onFollowUp)(slot)}
+                  />
+                )}
+
+                {m.type === "otp_input" && (
+                  <OTPInputWidget
+                    data={m.data}
+                    onSubmit={(otp) => (onSend ?? onFollowUp)(otp)}
+                  />
+                )}
+
+                {m.type === "confirmation" && (
+                  <ConfirmationWidget data={m.data} />
                 )}
 
                 {(m.type !== "text" || m.content) && (

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { mockStream, type StreamEvent } from "./mockStream";
 import { realStream } from "./realStream";
 
-export type MessageType = "text" | "car_cards" | "emi_widget" | "price_estimate";
+export type MessageType = "text" | "car_cards" | "emi_widget" | "price_estimate" | "price_card" | "slot_picker" | "otp_input" | "confirmation";
 export interface ChatMessage {
   id: string;
   role: "user" | "assistant";
@@ -173,6 +173,26 @@ export function useChatStream() {
               id: uuid(), role: "assistant", content: "", type: "price_estimate",
               data: e.data, timestamp: Date.now(),
             }]);
+          } else if (e.tool === "price_card") {
+            setMessages((prev) => [...prev, {
+              id: uuid(), role: "assistant", content: "", type: "price_card",
+              data: e.data, timestamp: Date.now(),
+            }]);
+          } else if (e.tool === "slot_picker") {
+            setMessages((prev) => [...prev, {
+              id: uuid(), role: "assistant", content: "", type: "slot_picker",
+              data: e.data, timestamp: Date.now(),
+            }]);
+          } else if (e.tool === "otp_input") {
+            setMessages((prev) => [...prev, {
+              id: uuid(), role: "assistant", content: "", type: "otp_input",
+              data: e.data, timestamp: Date.now(),
+            }]);
+          } else if (e.tool === "confirmation") {
+            setMessages((prev) => [...prev, {
+              id: uuid(), role: "assistant", content: "", type: "confirmation",
+              data: e.data, timestamp: Date.now(),
+            }]);
           }
         } else if (e.type === "done") {
           // Apply follow-ups from AI to the last assistant message
@@ -190,7 +210,7 @@ export function useChatStream() {
       };
 
       try {
-        await realStream(trimmed, messagesRef.current, handle);
+        await realStream(trimmed, messagesRef.current, handle, sessionId || undefined);
       } catch (err: unknown) {
         const code = (err as { code?: string })?.code;
         if (code === "no_api_key" || !navigator.onLine) {

@@ -87,6 +87,7 @@ export function ChatPage() {
               shortlisted={chat.shortlisted}
               onToggleShortlist={chat.toggleShortlist}
               onFollowUp={handleSend}
+              onSend={handleSend}
             />
           ) : (
             <WelcomeScreen onSend={handleSend} behavior={behavior} />
