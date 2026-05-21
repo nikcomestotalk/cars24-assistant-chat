@@ -12,4 +12,3 @@ export { useChatStream } from "./useChatStream";
 export { useUserBehavior } from "./useUserBehavior";
 export { mockStream, MOCK_CARS } from "./mockStream";
 export { realStream } from "./realStream";
-export { chatServerFn } from "../../server/chat";

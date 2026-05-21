@@ -1,4 +1,4 @@
-import { chatServerFn } from "../../server/chat";
+import { chatServerFn } from "../../lib/chatFn";
 import type { StreamEvent } from "./mockStream";
 
 type HistoryMessage = { role: "user" | "assistant"; content: string; type: string };
