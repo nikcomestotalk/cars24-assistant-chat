@@ -170,17 +170,16 @@ export type ChatResponse = {
 export const chatServerFn = createServerFn({ method: "POST" })
   .inputValidator((data: ChatRequest) => data)
   .handler(async ({ data }): Promise<ChatResponse> => {
-    const apiKey = process.env.ANTHROPIC_API_KEY;
-    if (!apiKey || apiKey === "sk-ant-...") {
-      return { text: "", tool: null, followUps: [], error: "no_api_key" };
-    }
+    const apiKey = process.env.ANTHROPIC_API_KEY ?? "";
+    const hasApiKey = !!apiKey && apiKey !== "sk-ant-...";
 
-    // ── Workflow engine path ────────────────────────────────────────────────
+    // ── Workflow engine path (works with or without API key) ───────────────
+    let workflowContext = "";
     if (data.sessionId && data.latestMessage) {
       const workflowOutput = await processWorkflowMessage(
         data.sessionId,
         data.latestMessage,
-        apiKey,
+        apiKey, // empty string → rule-based extractor fallback
       );
       if (workflowOutput) {
         return {
@@ -191,9 +190,67 @@ export const chatServerFn = createServerFn({ method: "POST" })
           isWorkflow: true,
         };
       }
+      // Workflow returned null (off-topic). Build rich context about the active workflow
+      // so the LLM can make intelligent, contextual decisions with natural, human responses
+      const { SessionStore } = await import("./workflow/SessionStore");
+      const { getFlow } = await import("./workflow/WorkflowEngine");
+      const session = SessionStore.get(data.sessionId);
+      if (session.workflowId) {
+        const flow = getFlow(session.workflowId);
+        const collectedEntries = Object.entries(session.collectedData)
+          .filter(([k, v]: [string, unknown]) => v !== undefined && v !== null && v !== "")
+          .map(([k, v]: [string, unknown]) => `${k}: ${v}`);
+        const currentStep = session.currentStepId ? flow?.steps[session.currentStepId] : undefined;
+        const pendingFields = currentStep?.requiredEntities
+          .filter((k: string) => !session.collectedData[k])
+          .map((k: string) => k.replace(/_/g, " ")) || [];
+
+        workflowContext = `\n\nACTIVE WORKFLOW CONTEXT:
+Workflow: "${flow?.name}" (${session.workflowId})
+User is actively in this workflow.
+
+COLLECTED DATA:
+${collectedEntries.length > 0 ? collectedEntries.join("\n") : "NONE — Session just started or was reset"}
+
+CURRENT STEP: "${currentStep?.prompt || 'unknown'}"
+Pending fields: ${pendingFields.length > 0 ? pendingFields.join(", ") : "none"}
+
+INTERACTION RULES:
+- Respond naturally and conversationally, as a human assistant would
+- ALWAYS start by understanding the user's request, then respond appropriately
+- If user asks to see/review/check what they've provided: Show collected data in conversational format, explain what's still needed
+- If user requests reset/restart/start over/begin again/from scratch/clear:
+  * Acknowledge warmly and confirm you're clearing data: "Of course! Let's start fresh."
+  * Clear all collected data and reset to beginning
+  * Ask the first workflow question naturally (as if starting a new conversation)
+- If NO DATA COLLECTED (fresh start or just reset): When appropriate, ask the first workflow question naturally
+  * Ask like you would in natural conversation, not as a prompt
+- If user asks off-topic questions: Answer helpfully and conversationally, then gently guide back to the workflow
+- If user provides info related to any workflow field (even if not current step): Acknowledge specifically and note it
+- Never be robotic, stiff, or system-like — sound like a real human: warm, understanding, helpful
+- Balance being helpful with keeping user focused on completing the workflow
+- Use conversational transitions, not mechanical ones
+
+EXAMPLES OF GOOD RESPONSES:
+✓ "Got it, let's start fresh. Which car would you like to sell?"
+✓ "Of course! Let's begin from the top. What car are you interested in selling?"
+✓ "Here's what you've mentioned so far: your 2021 WagonR, it's petrol... We still need to know the city and mileage."
+✓ "Sure, I can help with that! But first, let me get your car details so we can find you the best price."
+
+EXAMPLES OF BAD RESPONSES:
+✗ "Restarting workflow. First step: collect car model."
+✗ "I'm your Cars24 assistant..."
+✗ "COLLECTED DATA: car_model: wagonr, year: 2021"`;
+      }
     }
 
-    // ── Free-form LLM path ─────────────────────────────────────────────────
+    // ── Free-form LLM path (requires API key) ─────────────────────────────
+    if (!hasApiKey) {
+      return { text: "", tool: null, followUps: [], error: "no_api_key" };
+    }
+
+    const systemPrompt = SYSTEM_PROMPT + workflowContext;
+
     const res = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: {
@@ -204,7 +261,7 @@ export const chatServerFn = createServerFn({ method: "POST" })
       body: JSON.stringify({
         model: "claude-haiku-4-5-20251001",
         max_tokens: 1024,
-        system: SYSTEM_PROMPT,
+        system: systemPrompt,
         messages: data.messages,
         tools: TOOLS,
       }),

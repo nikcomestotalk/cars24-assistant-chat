@@ -232,7 +232,7 @@ function ConfigPanel({ step, onChange, onDelete, onClose }: {
         {step.type === "ask" && <>
           <div>
             <label className="label">Question</label>
-            <textarea className="input-base resize-none" rows={3} value={step.question ?? ""} onChange={e => u({ question: e.target.value })} placeholder="What to ask the user…" />
+            <textarea className="input-base resize-none" rows={3} value={step.question ?? ""} onChange={e => u({ question: e.target.value })} placeholder="What to ask the user… Use {{field_key}} for dynamic values." />
           </div>
           <div>
             <div className="mb-1.5 flex items-center justify-between">
@@ -261,12 +261,48 @@ function ConfigPanel({ step, onChange, onDelete, onClose }: {
                   <input className="input-sm w-full" placeholder="Options, comma-separated" value={(f.options ?? []).join(", ")}
                     onChange={e => setField(i, { ...f, options: e.target.value.split(",").map(s => s.trim()).filter(Boolean) })} />
                 )}
-                {f.example !== undefined || true ? (
-                  <input className="input-sm w-full" placeholder="Example hint" value={f.example ?? ""}
-                    onChange={e => setField(i, { ...f, example: e.target.value })} />
-                ) : null}
+                <input className="input-sm w-full" placeholder="Example hint" value={f.example ?? ""}
+                  onChange={e => setField(i, { ...f, example: e.target.value })} />
               </div>
             ))}
+          </div>
+          <div>
+            <label className="label">Skip if already collected (comma-separated keys)</label>
+            <input className="input-base" placeholder="e.g. year, fuel_type" value={(step.skipIfPresent ?? []).join(", ")}
+              onChange={e => u({ skipIfPresent: e.target.value.split(",").map(s => s.trim()).filter(Boolean) })} />
+          </div>
+          <div>
+            <label className="label">API to call on completion</label>
+            <select className="input-base" value={step.apiOnComplete ?? ""}
+              onChange={e => u({ apiOnComplete: e.target.value || undefined })}>
+              <option value="">None</option>
+              <option value="send_otp">send_otp</option>
+              <option value="verify_otp">verify_otp</option>
+              <option value="price_estimate">price_estimate</option>
+              <option value="book_inspection">book_inspection</option>
+            </select>
+          </div>
+          {step.apiOnComplete && (
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="label">On success → step id</label>
+                <input className="input-base" placeholder="step id" value={step.onSuccessStep ?? ""}
+                  onChange={e => u({ onSuccessStep: e.target.value || undefined })} />
+              </div>
+              <div>
+                <label className="label">On fail → step id</label>
+                <input className="input-base" placeholder="step id (blank = retry)" value={step.onFailStep ?? ""}
+                  onChange={e => u({ onFailStep: e.target.value || undefined })} />
+              </div>
+            </div>
+          )}
+          <div>
+            <label className="label">Widget to show (optional)</label>
+            <select className="input-base" value={step.widgetType ?? ""}
+              onChange={e => u({ widgetType: e.target.value as FlowStep["widgetType"] || undefined })}>
+              <option value="">None</option>
+              <option value="otp_input">OTP Input</option>
+            </select>
           </div>
         </>}
 
@@ -320,6 +356,8 @@ function ConfigPanel({ step, onChange, onDelete, onClose }: {
               <option value="price_estimate">Price Estimate</option>
               <option value="emi_calculator">EMI Calculator</option>
               <option value="car_cards">Car Cards</option>
+              <option value="slot_picker">Slot Picker</option>
+              <option value="otp_input">OTP Input</option>
               <option value="booking_calendar">Booking Calendar</option>
               <option value="confirmation">Confirmation</option>
             </select>
@@ -328,6 +366,52 @@ function ConfigPanel({ step, onChange, onDelete, onClose }: {
             <label className="label">Data from step ID</label>
             <input className="input-base" value={step.widgetDataStep ?? ""} onChange={e => u({ widgetDataStep: e.target.value })} placeholder="step ID whose output feeds this widget" />
           </div>
+          <div>
+            <label className="label">Question / prompt (if also collecting input)</label>
+            <textarea className="input-base resize-none" rows={2} value={step.question ?? ""} onChange={e => u({ question: e.target.value })} placeholder="Use {{field_key}} for dynamic values" />
+          </div>
+          {(step.fields ?? []).length > 0 || true ? (
+            <div>
+              <div className="mb-1.5 flex items-center justify-between">
+                <label className="label mb-0">Fields to collect (optional)</label>
+                <button type="button" className="btn-xs" onClick={addField}>+ Add field</button>
+              </div>
+              {(step.fields ?? []).map((f, i) => (
+                <div key={i} className="mb-2 space-y-1.5 rounded-lg border border-border bg-muted/40 p-2">
+                  <div className="flex gap-1.5">
+                    <input className="input-sm flex-1" placeholder="key" value={f.key} onChange={e => setField(i, { ...f, key: e.target.value })} />
+                    <input className="input-sm flex-1" placeholder="label" value={f.label} onChange={e => setField(i, { ...f, label: e.target.value })} />
+                    <button type="button" className="p-1 text-muted-foreground hover:text-destructive" onClick={() => delField(i)}><Trash2 size={12} /></button>
+                  </div>
+                  <div className="flex gap-1.5">
+                    <select className="input-sm flex-1" value={f.type} onChange={e => setField(i, { ...f, type: e.target.value as FieldDef["type"] })}>
+                      <option value="text">text</option>
+                      <option value="number">number</option>
+                      <option value="select">select</option>
+                      <option value="date">date</option>
+                    </select>
+                    <label className="flex cursor-pointer items-center gap-1 text-[11px] text-muted-foreground">
+                      <input type="checkbox" checked={f.required} onChange={e => setField(i, { ...f, required: e.target.checked })} /> required
+                    </label>
+                  </div>
+                  {f.type === "select" && (
+                    <input className="input-sm w-full" placeholder="Options, comma-separated" value={(f.options ?? []).join(", ")}
+                      onChange={e => setField(i, { ...f, options: e.target.value.split(",").map(s => s.trim()).filter(Boolean) })} />
+                  )}
+                </div>
+              ))}
+              {(step.fields ?? []).length > 0 && (
+                <div>
+                  <label className="label">Branch condition (field key or "key == 'value'")</label>
+                  <input className="input-base" value={step.condition ?? ""} onChange={e => u({ condition: e.target.value })} placeholder="e.g. wants_inspection" />
+                  <div className="mt-1.5 grid grid-cols-2 gap-1.5">
+                    <input className="input-sm" placeholder="Yes → step id" value={step.branchYes ?? ""} onChange={e => u({ branchYes: e.target.value || undefined })} />
+                    <input className="input-sm" placeholder="No → step id" value={step.branchNo ?? ""} onChange={e => u({ branchNo: e.target.value || undefined })} />
+                  </div>
+                </div>
+              )}
+            </div>
+          ) : null}
           <div>
             <label className="label">Follow-up chips (comma-separated)</label>
             <input className="input-base" value={(step.followUpChips ?? []).join(", ")}
