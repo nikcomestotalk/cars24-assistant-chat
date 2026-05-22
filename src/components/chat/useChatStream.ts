@@ -39,20 +39,18 @@ function loadChats(): SavedChat[] {
 export function useChatStream() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isStreaming, setIsStreaming] = useState(false);
-  const [sessionId, setSessionId] = useState<string>("");
   const [shortlisted, setShortlisted] = useState<number[]>([]);
   const [chats, setChats] = useState<SavedChat[]>([]);
   const [activeChatId, setActiveChatId] = useState<string>("");
   const cancelRef = useRef(false);
   const hydratedRef = useRef(false);
   const messagesRef = useRef<ChatMessage[]>([]);
+  // Each chat uses its own activeChatId as the workflow session ID
+  // so switching/creating chats always gives isolated workflow state.
+  const activeChatIdRef = useRef<string>("");
 
   useEffect(() => {
     if (typeof window === "undefined") return;
-    const existing = localStorage.getItem("cars24_session_id");
-    const sid = existing ?? uuid();
-    if (!existing) localStorage.setItem("cars24_session_id", sid);
-    setSessionId(sid);
     try {
       const s = JSON.parse(localStorage.getItem("cars24_shortlist") || "[]");
       if (Array.isArray(s)) setShortlisted(s);
@@ -64,15 +62,19 @@ export function useChatStream() {
     const active = all.find((c) => c.id === activeId);
     if (active) {
       setActiveChatId(active.id);
+      activeChatIdRef.current = active.id;
       setMessages(active.messages);
     } else {
-      setActiveChatId(uuid());
+      const freshId = uuid();
+      setActiveChatId(freshId);
+      activeChatIdRef.current = freshId;
     }
     hydratedRef.current = true;
   }, []);
 
-  // Keep ref in sync so sendMessage always sees current history
+  // Keep refs in sync so sendMessage always sees current values
   useEffect(() => { messagesRef.current = messages; }, [messages]);
+  useEffect(() => { activeChatIdRef.current = activeChatId; }, [activeChatId]);
 
   // Persist current chat whenever messages change
   useEffect(() => {
@@ -106,6 +108,7 @@ export function useChatStream() {
   const newChat = useCallback(() => {
     if (isStreaming) { cancelRef.current = true; setIsStreaming(false); }
     const id = uuid();
+    activeChatIdRef.current = id;
     setActiveChatId(id);
     setMessages([]);
     try { localStorage.setItem(ACTIVE_KEY, id); } catch {}
@@ -115,6 +118,7 @@ export function useChatStream() {
     if (isStreaming) { cancelRef.current = true; setIsStreaming(false); }
     const chat = chats.find((c) => c.id === id);
     if (!chat) return;
+    activeChatIdRef.current = id;
     setActiveChatId(id);
     setMessages(chat.messages);
     try { localStorage.setItem(ACTIVE_KEY, id); } catch {}
@@ -128,6 +132,7 @@ export function useChatStream() {
     });
     if (id === activeChatId) {
       const fresh = uuid();
+      activeChatIdRef.current = fresh;
       setActiveChatId(fresh);
       setMessages([]);
       try { localStorage.setItem(ACTIVE_KEY, fresh); } catch {}
@@ -210,7 +215,7 @@ export function useChatStream() {
       };
 
       try {
-        await realStream(trimmed, messagesRef.current, handle, sessionId || undefined);
+        await realStream(trimmed, messagesRef.current, handle, activeChatIdRef.current || undefined);
       } catch (err: unknown) {
         const code = (err as { code?: string })?.code;
         if (code === "no_api_key" || !navigator.onLine) {
@@ -230,7 +235,7 @@ export function useChatStream() {
   );
 
   return {
-    messages, isStreaming, sessionId, shortlisted, toggleShortlist,
+    messages, isStreaming, shortlisted, toggleShortlist,
     sendMessage, chats, activeChatId, newChat, loadChat, deleteChat,
   };
 }

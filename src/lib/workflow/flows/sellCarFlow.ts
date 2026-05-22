@@ -129,13 +129,13 @@ export const sellCarFlow: WorkflowDefinition = {
       entitySchema: {},
       apiCall: valuationApi,
       nextStep: "show_price",
-      uiComponent: "price_card",
     },
 
     // ── Step 7: Show price + offer inspection ───────────────────────────────
     show_price: {
       id: "show_price",
       prompt: "Your {{car_model}} ({{year}}, {{fuel_type}}, {{km_driven}} km) is estimated at ₹{{priceMin}}L–₹{{priceMax}}L. Would you like to book a free doorstep inspection to get a final confirmed offer?",
+      uiComponent: "price_card",
       requiredEntities: ["wants_inspection"],
       entitySchema: {
         wants_inspection: {
@@ -196,11 +196,21 @@ export const sellCarFlow: WorkflowDefinition = {
       },
       apiCall: otpApi.verify,
       nextStep: (_, apiResult) =>
-        apiResult?.success ? "select_slot" : "verify_otp",
+        apiResult?.success ? "fetch_slots" : "verify_otp",
       uiComponent: "otp_input",
     },
 
-    // ── Step 10: Slot selection ─────────────────────────────────────────────
+    // ── Step 10a: Fetch available slots (auto-advance) ──────────────────────
+    fetch_slots: {
+      id: "fetch_slots",
+      prompt: "Fetching available slots…",
+      requiredEntities: [],
+      entitySchema: {},
+      apiCall: slotsApi,
+      nextStep: "select_slot",
+    },
+
+    // ── Step 10b: Slot selection ────────────────────────────────────────────
     select_slot: {
       id: "select_slot",
       prompt: "Phone verified! Please choose a convenient inspection slot:",
@@ -212,7 +222,6 @@ export const sellCarFlow: WorkflowDefinition = {
           description: "The chosen inspection slot, e.g. 'Tomorrow, 9 AM – 11 AM'",
         },
       },
-      apiCall: slotsApi,
       nextStep: "book_inspection",
       uiComponent: "slot_picker",
     },

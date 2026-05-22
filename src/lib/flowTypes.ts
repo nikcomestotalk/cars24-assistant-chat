@@ -26,9 +26,16 @@ export interface FlowStep {
   type: StepType;
   label: string;       // e.g. "Ask for car details"
 
-  // ask
+  // ask (also usable on widget steps that collect input)
   question?: string;
   fields?: FieldDef[];
+  skipIfPresent?: string[];   // skip this step if all these entity keys are already collected
+  validateAnyOf?: string[];   // at least one of these field keys must be present
+
+  // api callback on ask completion (e.g. send OTP after collecting phone)
+  apiOnComplete?: string;   // API name to call after entities collected
+  onSuccessStep?: string;   // step id if API succeeds
+  onFailStep?: string;      // step id if API fails (defaults to current step)
 
   // api
   apiName?: string;    // e.g. "price_estimate", "book_inspection"
@@ -37,14 +44,14 @@ export interface FlowStep {
   apiOutputKey?: string; // what key to store the result under
 
   // widget
-  widgetType?: "price_estimate" | "emi_calculator" | "car_cards" | "booking_calendar" | "confirmation";
+  widgetType?: "price_estimate" | "emi_calculator" | "car_cards" | "booking_calendar" | "confirmation" | "otp_input" | "slot_picker";
   widgetDataStep?: string; // which step's output feeds this widget
 
   // message
   messageTemplate?: string; // can reference {{field}} from collected data
 
   // branch
-  condition?: string;  // e.g. "user_confirms == true"
+  condition?: string;  // e.g. "wants_inspection" or "field == 'value'"
   branchYes?: string;  // step id to go to if true
   branchNo?: string;   // step id to go to if false
 
@@ -80,98 +87,173 @@ export const SEED_FLOWS: ConversationFlow[] = [
   {
     id: "sell_car",
     name: "Sell My Car",
-    description: "End-to-end flow for a user who wants to sell their car — estimate → inspection booking → payment",
+    description: "End-to-end flow: collect car details → price estimate → inspection booking → OTP verification → slot selection → confirmation",
     icon: "💰",
     color: "green",
-    triggers: ["sell", "selling", "want to sell", "car worth", "price of my car"],
+    triggers: ["sell", "selling", "want to sell", "car worth", "price of my car", "how much for my car", "inspection", "car valuation"],
     status: "active",
     dependencies: [],
-    apiDependencies: ["price_estimate API", "book_inspection API", "RC verification API"],
+    apiDependencies: ["price_estimate", "send_otp", "verify_otp", "fetch_slots", "book_inspection"],
     createdAt: 1700000000000,
     updatedAt: 1700000000000,
     steps: [
       {
-        id: "ask_car_details",
+        id: "collect_car_or_rc",
         type: "ask",
-        label: "Ask for car details",
-        question: "Which car do you want to sell? Please share the model, year, and approximate KMs driven.",
+        label: "Ask for car name or RC number",
+        question: "Which car would you like to sell? You can type the car name (e.g. Maruti Swift, Honda City) or share your RC number (e.g. MH02AB1234) and we'll fetch the details automatically.",
         fields: [
-          { key: "car_name", label: "Car Model", type: "text", required: true, example: "Maruti WagonR VXI" },
-          { key: "year", label: "Year of Manufacture", type: "number", required: false, example: "2020" },
-          { key: "km", label: "KMs Driven", type: "number", required: false, example: "45000" },
-          { key: "city", label: "City", type: "text", required: false, example: "Delhi" },
-          { key: "fuel", label: "Fuel Type", type: "select", required: false, options: ["Petrol", "Diesel", "CNG", "Electric"] },
+          { key: "car_model", label: "Car Name", type: "text", required: false, example: "Maruti WagonR" },
+          { key: "rc_number", label: "RC Number", type: "text", required: false, example: "MH02AB1234" },
         ],
-        notes: "Year and KMs are optional — if missing, use typical defaults and show hasDefaults=true warning",
+        validateAnyOf: ["car_model", "rc_number"],
+        nextStepId: "check_rc_or_model",
       },
       {
-        id: "fetch_estimate",
+        id: "check_rc_or_model",
+        type: "branch",
+        label: "RC or manual?",
+        condition: "rc_number",
+        branchYes: "fetch_rc_details",
+        branchNo: "collect_year",
+      },
+      {
+        id: "fetch_rc_details",
         type: "api",
-        label: "Fetch price estimate",
+        label: "Fetch RC details",
+        apiName: "rc_lookup",
+        apiOutputKey: "rc_result",
+        nextStepId: "collect_year",
+        notes: "Returns car_model and city from RC number. Year, fuel, km still collected manually.",
+      },
+      {
+        id: "collect_year",
+        type: "ask",
+        label: "Ask for year",
+        question: "What year was your {{car_model}} manufactured?",
+        fields: [{ key: "year", label: "Year", type: "number", required: true, example: "2019" }],
+        skipIfPresent: ["year"],
+        nextStepId: "collect_fuel_type",
+      },
+      {
+        id: "collect_fuel_type",
+        type: "ask",
+        label: "Ask for fuel type",
+        question: "Is your {{car_model}} ({{year}}) petrol, diesel, CNG, or electric?",
+        fields: [{ key: "fuel_type", label: "Fuel Type", type: "select", required: true, options: ["Petrol", "Diesel", "CNG", "Electric"] }],
+        skipIfPresent: ["fuel_type"],
+        nextStepId: "collect_km",
+      },
+      {
+        id: "collect_km",
+        type: "ask",
+        label: "Ask for km driven",
+        question: "Approximately how many kilometres has your car been driven?",
+        fields: [{ key: "km_driven", label: "KMs Driven", type: "number", required: true, example: "45000" }],
+        nextStepId: "collect_city",
+      },
+      {
+        id: "collect_city",
+        type: "ask",
+        label: "Ask for city",
+        question: "Which city are you in? This helps us find the best price for your area.",
+        fields: [{ key: "city", label: "City", type: "text", required: true, example: "Delhi" }],
+        skipIfPresent: ["city"],
+        nextStepId: "fetch_valuation",
+      },
+      {
+        id: "fetch_valuation",
+        type: "api",
+        label: "Fetch valuation",
         apiName: "price_estimate",
         apiEndpoint: "/api/price-estimate",
         apiParams: [
-          { key: "car_name", source: "user_input", fieldKey: "car_name" },
+          { key: "car_name", source: "user_input", fieldKey: "car_model" },
           { key: "year", source: "user_input", fieldKey: "year" },
-          { key: "km", source: "user_input", fieldKey: "km" },
+          { key: "km", source: "user_input", fieldKey: "km_driven" },
           { key: "city", source: "user_input", fieldKey: "city" },
-          { key: "fuel", source: "user_input", fieldKey: "fuel" },
+          { key: "fuel", source: "user_input", fieldKey: "fuel_type" },
         ],
-        apiOutputKey: "price_estimate_result",
-        notes: "Returns priceMin, priceMax, priceEstimate, factors[]",
+        apiOutputKey: "valuation_result",
+        nextStepId: "show_price",
       },
       {
-        id: "show_estimate",
+        id: "show_price",
         type: "widget",
-        label: "Show price estimate widget",
+        label: "Show price card + ask inspection",
         widgetType: "price_estimate",
-        widgetDataStep: "fetch_estimate",
-        followUpChips: ["Book free inspection", "How to improve my price?", "Documents needed", "What happens next?"],
+        widgetDataStep: "fetch_valuation",
+        question: "Your {{car_model}} ({{year}}, {{fuel_type}}, {{km_driven}} km) is estimated at ₹{{priceMin}}L–₹{{priceMax}}L. Would you like to book a free doorstep inspection to get a final confirmed offer?",
+        fields: [{ key: "wants_inspection", label: "Book inspection?", type: "select", required: true, options: ["Yes", "No"] }],
+        condition: "wants_inspection",
+        branchYes: "collect_phone",
+        branchNo: "decline_inspection",
+        followUpChips: ["Yes, book inspection", "Not right now"],
       },
       {
-        id: "ask_inspection",
-        type: "ask",
-        label: "Ask if user wants inspection",
-        question: "Would you like to book a free doorstep inspection? A Cars24 expert will visit you and give a final offer.",
-        fields: [
-          { key: "wants_inspection", label: "Book inspection?", type: "select", required: true, options: ["Yes, book it", "Not now"] },
-        ],
+        id: "decline_inspection",
+        type: "message",
+        label: "Decline message",
+        messageTemplate: "No problem! Your estimated value is ₹{{priceMin}}L–₹{{priceMax}}L. Whenever you're ready to sell, just come back and we'll get you a confirmed offer.",
       },
       {
-        id: "ask_slot",
+        id: "collect_phone",
         type: "ask",
-        label: "Ask for preferred time slot",
-        question: "When would you like the inspection? Please share your preferred date and time.",
-        fields: [
-          { key: "inspection_date", label: "Preferred Date", type: "date", required: true },
-          { key: "inspection_time", label: "Preferred Time", type: "select", required: true, options: ["9 AM–11 AM", "11 AM–1 PM", "2 PM–4 PM", "4 PM–6 PM"] },
-          { key: "address", label: "Pickup Address", type: "text", required: true, example: "123 Main St, Delhi" },
-        ],
+        label: "Collect phone number",
+        question: "To book your inspection, please share your mobile number.",
+        fields: [{ key: "phone_number", label: "Phone Number", type: "text", required: true, example: "9876543210" }],
+        apiOnComplete: "send_otp",
+        onSuccessStep: "verify_otp",
+        onFailStep: "collect_phone",
+        nextStepId: "verify_otp",
+      },
+      {
+        id: "verify_otp",
+        type: "ask",
+        label: "Verify OTP",
+        question: "I've sent a 6-digit OTP to {{phone_number}}. Please enter it to confirm.",
+        fields: [{ key: "otp_code", label: "OTP Code", type: "text", required: true, example: "123456" }],
+        widgetType: "otp_input",
+        apiOnComplete: "verify_otp",
+        onSuccessStep: "fetch_slots",
+        onFailStep: "verify_otp",
+        nextStepId: "fetch_slots",
+      },
+      {
+        id: "fetch_slots",
+        type: "api",
+        label: "Fetch available slots",
+        apiName: "fetch_slots",
+        apiOutputKey: "slots_result",
+        nextStepId: "select_slot",
+      },
+      {
+        id: "select_slot",
+        type: "widget",
+        label: "Select inspection slot",
+        widgetType: "slot_picker",
+        widgetDataStep: "fetch_slots",
+        question: "Phone verified! Please choose a convenient inspection slot:",
+        fields: [{ key: "selected_slot", label: "Selected Slot", type: "text", required: true }],
+        nextStepId: "book_inspection",
+        followUpChips: [],
       },
       {
         id: "book_inspection",
         type: "api",
-        label: "Book inspection appointment",
+        label: "Book inspection",
         apiName: "book_inspection",
-        apiEndpoint: "/api/book-inspection",
-        apiParams: [
-          { key: "car_name", source: "step_output", stepId: "ask_car_details", outputKey: "car_name" },
-          { key: "date", source: "user_input", fieldKey: "inspection_date" },
-          { key: "time_slot", source: "user_input", fieldKey: "inspection_time" },
-          { key: "address", source: "user_input", fieldKey: "address" },
-          { key: "estimated_price", source: "step_output", stepId: "fetch_estimate", outputKey: "priceEstimate" },
-        ],
         apiOutputKey: "booking_result",
-        notes: "Returns booking_id, confirmed_slot, executive_name, contact_number",
+        nextStepId: "show_confirmation",
       },
       {
         id: "show_confirmation",
         type: "widget",
-        label: "Show booking confirmation",
+        label: "Show confirmation",
         widgetType: "confirmation",
         widgetDataStep: "book_inspection",
-        followUpChips: ["Documents needed", "How to prepare for inspection?", "Cancel/Reschedule"],
-        notes: "Show booking ID, executive name, slot time. Also show what happens next (30-min inspection → offer → payment in 30 min)",
+        messageTemplate: "Your inspection is confirmed! A Cars24 expert will visit you at {{selected_slot}}. Booking ID: {{bookingId}}.",
+        followUpChips: ["Documents needed", "How to prepare?", "Cancel/Reschedule"],
       },
     ],
   },

@@ -7,17 +7,39 @@ import type {
 } from "./types";
 import { sellCarFlow } from "./flows/sellCarFlow";
 import { SessionStore } from "./SessionStore";
+import { readFlowsFromDisk } from "../flowStore";
+import { convertAllFlows } from "./FlowConverter";
 
-const FLOWS: Record<string, WorkflowDefinition> = {
+// Hardcoded fallback flows (used when no disk flows exist)
+const STATIC_FLOWS: Record<string, WorkflowDefinition> = {
   sell_car: sellCarFlow,
 };
 
+// Cache converted flows from disk with short TTL so changes in Flow Builder
+// take effect on the next chat message without needing a server restart.
+let _cache: Record<string, WorkflowDefinition> | null = null;
+let _cacheAt = 0;
+const CACHE_TTL = 3000; // 3 seconds
+
+function getDynamicFlows(): Record<string, WorkflowDefinition> {
+  const now = Date.now();
+  if (_cache && now - _cacheAt < CACHE_TTL) return _cache;
+  try {
+    _cache = convertAllFlows(readFlowsFromDisk());
+    _cacheAt = now;
+    return _cache;
+  } catch {
+    return STATIC_FLOWS;
+  }
+}
+
 export function getFlow(id: string): WorkflowDefinition | null {
-  return FLOWS[id] ?? null;
+  const dynamic = getDynamicFlows();
+  return dynamic[id] ?? STATIC_FLOWS[id] ?? null;
 }
 
 export function getStep(workflowId: string, stepId: string): WorkflowStep | null {
-  return FLOWS[workflowId]?.steps[stepId] ?? null;
+  return getFlow(workflowId)?.steps[stepId] ?? null;
 }
 
 /** Interpolates {{key}} placeholders from collected data */
@@ -31,7 +53,8 @@ export function resolveTemplate(template: string, data: CollectedData): string {
 /** Detect which workflow (if any) the message should trigger */
 export function detectWorkflowIntent(message: string): string | null {
   const lower = message.toLowerCase();
-  for (const [id, flow] of Object.entries(FLOWS)) {
+  const flows = { ...STATIC_FLOWS, ...getDynamicFlows() };
+  for (const [id, flow] of Object.entries(flows)) {
     if (flow.triggerPhrases.some((phrase) => lower.includes(phrase))) {
       return id;
     }
@@ -149,12 +172,17 @@ export async function advanceSession(
     isComplete: nextStepId === null,
   };
 
-  // Auto-advance through API-only steps (requiredEntities === [])
-  // These steps just call an API and forward — no user input needed
+  // Auto-advance through steps that don't need user input:
+  // - steps with no requiredEntities (pure API/branch steps)
+  // - steps where all required entities are already in collectedData (skipIfPresent)
   while (nextStepId) {
     const nextStep = flow.steps[nextStepId];
-    if (!nextStep || nextStep.requiredEntities.length > 0) break;
+    if (!nextStep) break;
     if (nextStep.isTerminal) break; // terminal steps need to show their prompt
+    const stillMissing = nextStep.requiredEntities.filter(
+      (key) => mergedData[key] === undefined || mergedData[key] === null || mergedData[key] === "",
+    );
+    if (stillMissing.length > 0) break; // user needs to provide these
 
     // Auto-run API call for this passthrough step
     let autoApiResult: APIResult | undefined;

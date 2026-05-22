@@ -1,12 +1,13 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Plus, ChevronDown, ChevronUp, Trash2, GripVertical, ArrowRight, Zap, MessageSquare, GitBranch, LayoutGrid, HelpCircle, Save, ArrowLeft, AlertCircle, CheckCircle2, Clock } from "lucide-react";
 import type { ConversationFlow, FlowStep, StepType, FieldDef, ApiParam } from "../../lib/flowTypes";
 import { SEED_FLOWS } from "../../lib/flowTypes";
 import { FlowCanvas } from "./FlowCanvas";
+import { loadFlowsFn, saveFlowsFn } from "../../lib/flowServerFn";
 
 const FLOWS_KEY = "cars24_flows";
 
-function loadFlows(): ConversationFlow[] {
+function loadFlowsLocal(): ConversationFlow[] {
   if (typeof window === "undefined") return SEED_FLOWS;
   try {
     const raw = localStorage.getItem(FLOWS_KEY);
@@ -18,8 +19,13 @@ function loadFlows(): ConversationFlow[] {
   return SEED_FLOWS;
 }
 
-function saveFlows(flows: ConversationFlow[]) {
+function saveFlowsLocal(flows: ConversationFlow[]) {
   try { localStorage.setItem(FLOWS_KEY, JSON.stringify(flows)); } catch {}
+}
+
+async function persistFlows(flows: ConversationFlow[]) {
+  saveFlowsLocal(flows);
+  try { await saveFlowsFn({ data: flows }); } catch {}
 }
 
 const uuid = () => Math.random().toString(36).slice(2) + Date.now().toString(36);
@@ -254,6 +260,8 @@ function StepCard({ step, index, total, onChange, onDelete, onMove }: {
                   <option value="price_estimate">Price Estimate</option>
                   <option value="emi_calculator">EMI Calculator</option>
                   <option value="car_cards">Car Cards</option>
+                  <option value="slot_picker">Slot Picker</option>
+                  <option value="otp_input">OTP Input</option>
                   <option value="booking_calendar">Booking Calendar</option>
                   <option value="confirmation">Confirmation Card</option>
                 </select>
@@ -522,15 +530,25 @@ function FlowListCard({ flow, onClick, onDelete }: {
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 export function FlowsPage() {
-  const [flows, setFlows] = useState<ConversationFlow[]>(loadFlows);
+  const [flows, setFlows] = useState<ConversationFlow[]>(loadFlowsLocal);
   const [selected, setSelected] = useState<string | null>(null);
+
+  // Hydrate from server on mount (server is source of truth)
+  useEffect(() => {
+    loadFlowsFn().then(serverFlows => {
+      if (serverFlows && serverFlows.length > 0) {
+        setFlows(serverFlows);
+        saveFlowsLocal(serverFlows);
+      }
+    }).catch(() => {});
+  }, []);
 
   const selectedFlow = flows.find(f => f.id === selected);
 
   const saveFlow = (updated: ConversationFlow) => {
     setFlows(prev => {
       const next = prev.map(f => f.id === updated.id ? updated : f);
-      saveFlows(next);
+      persistFlows(next);
       return next;
     });
   };
@@ -550,12 +568,12 @@ export function FlowsPage() {
       createdAt: Date.now(),
       updatedAt: Date.now(),
     };
-    setFlows(prev => { const next = [...prev, f]; saveFlows(next); return next; });
+    setFlows(prev => { const next = [...prev, f]; persistFlows(next); return next; });
     setSelected(f.id);
   };
 
   const deleteFlow = (id: string) => {
-    setFlows(prev => { const next = prev.filter(f => f.id !== id); saveFlows(next); return next; });
+    setFlows(prev => { const next = prev.filter(f => f.id !== id); persistFlows(next); return next; });
     if (selected === id) setSelected(null);
   };
 
