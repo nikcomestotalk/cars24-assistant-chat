@@ -1,6 +1,28 @@
 import { createServerFn } from "@tanstack/react-start";
 import { processWorkflowMessage } from "./workflow/ConversationController";
 
+/**
+ * Plain vars/secrets from `wrangler` + `.dev.vars` are exposed as `env` bindings
+ * (`import { env } from "cloudflare:workers"`). They are **not** copied onto
+ * `process.env`, so Node-style reads miss them in workerd/dev.
+ */
+async function getAnthropicApiKey(): Promise<string> {
+  try {
+    const { env } = (await import(
+      /* vite-ignore workers-only virtual module */
+      "cloudflare:workers"
+    )) as { env: { ANTHROPIC_API_KEY?: string } };
+    const fromBindings = env.ANTHROPIC_API_KEY?.trim();
+    if (fromBindings) return fromBindings;
+  } catch {
+    /* not executing in Workers (e.g. tests) */
+  }
+  
+
+
+  return typeof process !== "undefined" ? (process.env.ANTHROPIC_API_KEY?.trim() ?? "") : "";
+}
+
 const SYSTEM_PROMPT = `You are an AI assistant for Cars24, India's largest used car marketplace.
 Help users buy used cars, sell their car, calculate EMI, find insurance, and book service.
 
@@ -178,7 +200,8 @@ export type ChatResponse = {
 export const chatServerFn = createServerFn({ method: "POST" })
   .inputValidator((data: ChatRequest) => data)
   .handler(async ({ data }): Promise<ChatResponse> => {
-    const apiKey = process.env.ANTHROPIC_API_KEY ?? "";
+    const apiKey = await getAnthropicApiKey();
+    console.log("🔑 [API KEY] API Key:", apiKey);
     const hasApiKey = !!apiKey && apiKey !== "sk-ant-...";
 
     // ── Workflow engine path (works with or without API key) ───────────────
@@ -190,6 +213,7 @@ export const chatServerFn = createServerFn({ method: "POST" })
         apiKey, // empty string → rule-based extractor fallback
       );
       if (workflowOutput) {
+        console.log("⚙️  [WORKFLOW] Handled by workflow engine (no LLM call):", workflowOutput.text?.substring(0, 100));
         return {
           text: workflowOutput.text,
           tool: null,
@@ -198,6 +222,7 @@ export const chatServerFn = createServerFn({ method: "POST" })
           isWorkflow: true,
         };
       }
+      console.log("↩️  [WORKFLOW] Returned null — falling through to LLM");
       // Workflow returned null (off-topic). Build rich context about the active workflow
       // so the LLM can make intelligent, contextual decisions with natural, human responses
       const { SessionStore } = await import("./workflow/SessionStore");
@@ -298,31 +323,55 @@ EXAMPLES OF RESPONSES TO AVOID:
     }
 
     // ── Free-form LLM path (requires API key) ─────────────────────────────
+    console.log("\n══════════════════════════════════════════");
+    console.log("🤖 [LLM PATH]");
+    console.log("  hasApiKey  :", hasApiKey);
+    console.log("  sessionId  :", data.sessionId);
+    console.log("  userMessage:", data.latestMessage);
+    console.log("  workflowCtx:", workflowContext ? "YES (workflow active)" : "NO (free-form)");
+    console.log("  msgCount   :", data.messages?.length ?? 0, "messages in history");
+    console.log("══════════════════════════════════════════\n");
+
     if (!hasApiKey) {
+      console.warn("⚠️  [LLM] No API key — returning error");
       return { text: "", tool: null, followUps: [], error: "no_api_key" };
     }
 
     const systemPrompt = SYSTEM_PROMPT + workflowContext;
 
-    const res = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "x-api-key": apiKey,
-        "anthropic-version": "2023-06-01",
-        "content-type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "claude-haiku-4-5-20251001",
-        max_tokens: 1024,
-        system: systemPrompt,
-        messages: data.messages,
-        tools: TOOLS,
-      }),
-    });
+    // Retry up to 3 times for transient errors (529 overloaded, 503, 502)
+    const RETRYABLE = new Set([529, 503, 502]);
+    let res!: Response;
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      console.log(`📤 [LLM] Calling Anthropic API... (attempt ${attempt}/3)`);
+      res = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: {
+          "x-api-key": apiKey,
+          "anthropic-version": "2023-06-01",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "claude-haiku-4-5-20251001",
+          max_tokens: 1024,
+          system: systemPrompt,
+          messages: data.messages,
+          tools: TOOLS,
+        }),
+      });
+
+      console.log(`📥 [LLM] Response status: ${res.status}`, res.ok ? "✅ OK" : "❌ ERROR");
+
+      if (res.ok || !RETRYABLE.has(res.status)) break;
+
+      const waitMs = attempt * 1500; // 1.5s, 3s
+      console.warn(`⏳ [LLM] ${res.status} Overloaded — retrying in ${waitMs}ms...`);
+      await new Promise(r => setTimeout(r, waitMs));
+    }
 
     if (!res.ok) {
       const err = await res.text();
-      console.error("Anthropic API error", res.status, err);
+      console.error("❌ [LLM] Anthropic API error", res.status, err);
       return { text: "", tool: null, followUps: [], error: `upstream_${res.status}` };
     }
 
@@ -334,6 +383,7 @@ EXAMPLES OF RESPONSES TO AVOID:
     const toolBlock = body.content.find((c) => c.type === "tool_use");
 
     const rawText = textBlock?.text ?? "";
+    console.log("💬 [LLM] Raw response (first 200 chars):", rawText.substring(0, 200));
     const { clean: text, followUps } = parseFollowUps(rawText);
 
     return {

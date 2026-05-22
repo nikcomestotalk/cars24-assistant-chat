@@ -19,6 +19,12 @@ dist-ssr
 # Wrangler / Cloudflare
 .wrangler/
 .dev.vars
+.dev
+
+# Environment variables (never commit API keys)
+.env
+.env.local
+.env.*.local
 
 # Editor directories and files
 .vscode/*
@@ -30,3 +36,4 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+package-lock.json
