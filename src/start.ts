@@ -1,5 +1,5 @@
 import { createStart } from "@tanstack/react-start";
 
-// TanStack Start basic initialization
-// Middleware API is not available in this version, so we use the default configuration
-export const startInstance = createStart();
+// TanStack Start requires a callback that returns configuration options
+// The callback is called to get the StartInstanceOptions
+export const startInstance = createStart(() => ({}));
